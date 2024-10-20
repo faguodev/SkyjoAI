@@ -5,6 +5,7 @@ from gym import spaces
 from pettingzoo import AECEnv
 from pettingzoo.utils import wrappers
 
+
 from skyjo_game import SkyjoGame
 
 DEFAULT_CONFIG = {
@@ -118,13 +119,14 @@ class SimpleSkyjoEnv(AECEnv):
 
         self.agent_selection = self._expected_agentname_and_action()[0]
 
-        self.dones = self._convert_to_dict([False for _ in range(self.num_agents)])
+        self.terminations = self._convert_to_dict([False for _ in range(self.num_agents)])
+        # Not needed, since SkyJo will always end, but required by AECEnv
+        self.truncations = self._convert_to_dict([False for _ in range(self.num_agents)])
         self.infos = {i: {} for i in self.agents}
 
-        # start obs / actions space
-        self._observation_spaces = self._convert_to_dict(
-            [
-                spaces.Dict(
+        self._observation_spaces = spaces.Dict(
+            {
+                agent_id: spaces.Dict(
                     {
                         "observations": spaces.Box(
                             low=-24,
@@ -140,14 +142,14 @@ class SimpleSkyjoEnv(AECEnv):
                         ),
                     }
                 )
-                for _ in self.possible_agents
-            ]
+                for agent_id in self.possible_agents
+            }
         )
-        self._action_spaces = self._convert_to_dict(
-            [
-                spaces.Discrete(self.table.action_mask_shape[0])
-                for _ in self.possible_agents
-            ]
+        self._action_spaces = spaces.Dict(
+            {
+                agent_id: spaces.Discrete(self.table.action_mask_shape[0])
+                for agent_id in self.possible_agents
+            }
         )
         # end obs / actions space
         # end PettingZoo API stuff
@@ -231,8 +233,8 @@ class SimpleSkyjoEnv(AECEnv):
         player_id = self._name_to_player_id(current_agent)
 
         # if was done before
-        if self.dones[current_agent]:
-            return self._was_done_step(action)
+        if self.terminations[current_agent]:
+            return self._was_dead_step(action)
 
         game_is_over = self.table.act(player_id, action_int=action)
         # prepare for next agent
@@ -244,14 +246,14 @@ class SimpleSkyjoEnv(AECEnv):
             self.rewards = self._convert_to_dict(
                 self._calc_final_rewards(**(self.table.get_game_metrics()))
             )
-            self.dones = {i: True for i in self.agents}
+            self.terminations = {i: True for i in self.agents}
 
         # done
         self._accumulate_rewards()
         self._clear_rewards()
-        self._dones_step_first()
+        self._deads_step_first()
 
-    def reset(self) -> None:
+    def reset(self, seed: int = None, options=None) -> None:
         """
         reset the environment
         part of the PettingZoo API
@@ -263,8 +265,11 @@ class SimpleSkyjoEnv(AECEnv):
         self._cumulative_rewards = self._convert_to_dict(
             [0 for _ in range(self.num_agents)]
         )
-        self.dones = self._convert_to_dict([False for _ in range(self.num_agents)])
+        self.terminations = self._convert_to_dict([False for _ in range(self.num_agents)])
         self.infos = {i: {} for i in self.agents}
+
+        if seed is not None:
+            self.table.set_seed(seed)
 
     def render(self, mode="human") -> None:
         """render board of the game to stdout
@@ -277,17 +282,17 @@ class SimpleSkyjoEnv(AECEnv):
         """part of the PettingZoo API"""
         pass
 
-    def seed(self, seed: int = None) -> None:
-        """seed the environment.
-        does not affect global np.random.seed()
-        experimental. only works with Numba installed
-        part of the PettingZoo API
-
-        Args:
-            seed (int, optional): [description]. Defaults to None.
-        """       
-        if seed is not None:
-            self.table.set_seed(seed)
+    # def seed(self, seed: int = None) -> None:
+    #     """seed the environment.
+    #     does not affect global np.random.seed()
+    #     experimental. only works with Numba installed
+    #     part of the PettingZoo API
+    #
+    #     Args:
+    #         seed (int, optional): [description]. Defaults to None.
+    #     """
+    #     if seed is not None:
+    #         self.table.set_seed(seed)
 
     # start utils
     def _calc_final_rewards(
@@ -332,3 +337,9 @@ class SimpleSkyjoEnv(AECEnv):
         return f"player_{a[0]}", a[1]
 
     # end utils
+
+
+if __name__ == "__main__":
+    from pettingzoo.test import api_test
+    env = SimpleSkyjoEnv()
+    api_test(env, num_cycles=1000, verbose_progress=True)
