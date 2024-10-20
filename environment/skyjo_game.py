@@ -77,7 +77,10 @@ class SkyjoGame(object):
     @njit()
     def _new_drawpile(card_dtype=np.int8):
         """create a drawpile len(150) and cards from -2 to 12"""
-        drawpile = np.repeat(np.arange(-2, 13, dtype=card_dtype), 10)
+        number_of_cards = [10 for _ in np.arange(-2, 13)]
+        number_of_cards[0] = 5
+        number_of_cards[2] = 15
+        drawpile = np.repeat(np.arange(-2, 13, dtype=card_dtype), number_of_cards)
         np.random.shuffle(drawpile)
         return drawpile
 
