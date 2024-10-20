@@ -116,7 +116,7 @@ class SimpleSkyjoEnv(AECEnv):
         self.agents = [i for i in range(num_players)]
         self.possible_agents = self.agents[:]
 
-        self.agent_selection = self._name_to_player_id(self._expected_agentname_and_action()[0])
+        self.agent_selection = self._expected_agentname_and_action()[0]
 
         self.terminations = self._convert_to_dict([False for _ in range(self.num_agents)])
         # Not needed, since SkyJo will always end, but required by AECEnv
@@ -237,7 +237,7 @@ class SimpleSkyjoEnv(AECEnv):
 
         game_is_over = self.table.act(current_agent, action_int=action)
         # prepare for next agent
-        self.agent_selection = self._name_to_player_id(self._expected_agentname_and_action()[0])
+        self.agent_selection = self._expected_agentname_and_action()[0]
 
         # action done, rewards if game over
         if game_is_over:
@@ -259,7 +259,7 @@ class SimpleSkyjoEnv(AECEnv):
         """
         self.table.reset()
         self.agents = self.possible_agents[:]
-        self.agent_selection = self._name_to_player_id(self._expected_agentname_and_action()[0])
+        self.agent_selection = self._expected_agentname_and_action()[0]
         self.rewards = self._convert_to_dict([0 for _ in range(self.num_agents)])
         self._cumulative_rewards = self._convert_to_dict(
             [0 for _ in range(self.num_agents)]
@@ -322,7 +322,7 @@ class SimpleSkyjoEnv(AECEnv):
     def _expected_agentname_and_action(self):
         """implemented, get next player name for action from skyjo"""
         a = self.table.get_expected_action()
-        return f"player_{a[0]}", a[1]
+        return a[0], a[1]
 
     # end utils
 
