@@ -13,6 +13,7 @@ DEFAULT_CONFIG = {
     "observe_other_player_indirect": True,
     "mean_reward": 1.0,
     "reward_refunded": 0.001,
+    "render_mode": "human"
 }
 
 
@@ -29,7 +30,7 @@ def env(**kwargs):
 class SimpleSkyjoEnv(AECEnv):
 
     metadata = {
-        "render.modes": ["human"],
+        "render_modes": ["human"],
         "name": "skyjo",
         "is_parallelizable": False,
         "video.frames_per_second": 1,
@@ -42,6 +43,7 @@ class SimpleSkyjoEnv(AECEnv):
         observe_other_player_indirect: bool = False,
         mean_reward: float = 1.0,
         reward_refunded: float = 0.0,
+        render_mode = None
     ):
         """
         Pettingzoo Gym for the card game SkyJo
@@ -113,6 +115,7 @@ class SimpleSkyjoEnv(AECEnv):
         )
 
         # start PettingZoo API stuff
+        self.render_mode = render_mode
         self.agents = [i for i in range(num_players)]
         self.possible_agents = self.agents[:]
 
@@ -233,24 +236,31 @@ class SimpleSkyjoEnv(AECEnv):
 
         # if was done before
         if self.terminations[current_agent]:
-            return self._was_dead_step(action)
+            return self._was_dead_step(None)
 
-        game_is_over = self.table.act(current_agent, action_int=action)
-        # prepare for next agent
-        self.agent_selection = self._expected_agentname_and_action()[0]
+        game_over, last_action = self.table.act(current_agent, action_int=action)
+        if last_action:
+            pass
 
         # action done, rewards if game over
-        if game_is_over:
+        if game_over:
             # current player has terminated the game for all. gather rewards
             self.rewards = self._convert_to_dict(
                 self._calc_final_rewards(**(self.table.get_game_metrics()))
             )
             self.terminations = {i: True for i in self.agents}
 
+        if last_action:
+            self.truncations[current_agent] = True
+
         # done
         self._accumulate_rewards()
         #self._clear_rewards()
-        self._deads_step_first()
+        # self._deads_step_first()
+
+        # prepare for next agent
+        if not game_over:
+            self.agent_selection = self._expected_agentname_and_action()[0]
 
     def reset(self, seed: int = None, options=None) -> None:
         """
@@ -271,12 +281,13 @@ class SimpleSkyjoEnv(AECEnv):
         if seed is not None:
             self.table.set_seed(seed)
 
-    def render(self, mode="human") -> None:
+    def render(self) -> None:
         """render board of the game to stdout
 
         part of the PettingZoo API"""
-        if mode == "human":
+        if self.render_mode == "human":
             print(self.table.render_table())
+
 
     def close(self) -> None:
         """part of the PettingZoo API"""

@@ -51,7 +51,9 @@ class SkyjoGame(object):
     # [start: reset utils]
     def reset(self):
         # 150 cards from -2 to 12
-        self.is_terminated = False
+        self.has_terminated = False
+        # If None, noone has initiated the last round, else the player_id is saved to indicate who revealed all cards first
+        self.last_round_initiator = None
         # metrics
         self.game_metrics = {
             "num_refunded": [0] * self.num_players,
@@ -309,33 +311,64 @@ class SkyjoGame(object):
     # [start: perform actions]
 
     def act(self, player_id: int, action_int: int):
-        """perform actions"""
+        """perform actions
+
+        returns:
+            game_over: If this was the last action and the game is now over
+            last_action: If this was the last action for the player
+        """
+
+        # Check if player_id and action_int are as expected
+        print(f"{player_id = }, {action_int = }")
         assert self.expected_action[0] == player_id, (
             f"ILLEGAL ACTION: expected {self.expected_action[0]}"
             f" but requested was {player_id}"
         )
         assert 0 <= action_int <= 25, f"action int {action_int} not in range(0,26)"
 
-        if self.is_terminated:
+        if self.has_terminated:
             warnings.warn(
                 "Attemp playing terminated game."
                 " game has been already terminated by pervios player."
             )
             return True
 
+        game_over = False
+        last_action = False
         if 24 <= action_int <= 25:
             assert self.hand_card == self.fill_masked_unk_value, (
                 "ILLEGAL ACTION. requested draw action"
                 f" {self.render_action_explainer(action_int)}"
                 f"already have a hand card {self.hand_card} "
             )
-            return self._action_draw_card(player_id, action_int)
+            self._action_draw_card(player_id, action_int)
         else:
             assert self.hand_card != self.fill_masked_unk_value, (
                 f"ILLEGAL ACTION. requested place action "
                 f"but not having a hand card {self.hand_card} "
             )
-            return self._action_place(player_id, action_int)
+            self._action_place(player_id, action_int)
+
+            # Check if the player has revealed all cards
+            last_action = self._player_goal_check(self.players_masked, player_id)
+            if last_action and self.last_round_initiator is None:
+                self.last_round_initiator = player_id
+
+        # Switch to the next expected action
+        self._internal_next_action()
+
+        # Check if that action belongs to the player that initiated the last round
+        if self.expected_action[0] == self.last_round_initiator:
+            self.has_terminated = True
+            self.game_metrics["final_score"] = self._evaluate_game(
+                self.players_cards, player_id, score_penalty=self.score_penalty
+            )
+            game_over = True
+        
+        if self.last_round_initiator is not None:
+            last_action = True
+
+        return game_over, last_action
 
     def _action_draw_card(self, player_id: int, draw_from: int):
         """
@@ -350,13 +383,6 @@ class SkyjoGame(object):
         # perform goal check
         # games end if any player has a open 12-card deck before picking up card.
 
-        game_done = self._player_goal_check(self.players_masked, player_id)
-        if game_done:
-            self.is_terminated = True
-            self.game_metrics["final_score"] = self._evaluate_game(
-                self.players_cards, player_id, score_penalty=self.score_penalty
-            )
-            return True
 
         # goal is not reached. continue drawing action
         if draw_from == 24:
@@ -373,8 +399,6 @@ class SkyjoGame(object):
             self.hand_card = self.discard_pile.pop()
 
         # action done
-        self._internal_next_action()
-        return False
 
     def _action_place(
         self, player_id: int, action_place_to_pos: int
@@ -426,8 +450,6 @@ class SkyjoGame(object):
         # action done
         self.game_metrics["num_placed"][player_id] += 1
         self.hand_card = self.fill_masked_unk_value
-        self._internal_next_action()
-        return False
 
     # [end: perform actions]
 
@@ -517,7 +539,7 @@ class SkyjoGame(object):
         render_cards_open = False
         str_board = f"{'='*7} render board: {'='*5} \n"
         str_board += self._render_game_stats()
-        if self.is_terminated:
+        if self.has_terminated:
             res = dict(
                 zip(list(range(self.num_players)), self.game_metrics["final_score"])
             )
