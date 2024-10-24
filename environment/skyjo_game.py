@@ -44,6 +44,7 @@ class SkyjoGame(object):
             (19 + 12,) if observe_other_player_indirect else (19 + num_players * 12,)
         )
         self.action_mask_shape = (26,)
+        self.previous_action = None
 
         # reset
         self.reset()
@@ -199,7 +200,7 @@ class SkyjoGame(object):
         )
 
         action_mask = self._jit_action_mask(
-            self.players_masked, player_id, self.expected_action[1]
+            self.players_masked, player_id, self.expected_action[1], self.previous_action
         )
         return obs, action_mask
 
@@ -209,13 +210,17 @@ class SkyjoGame(object):
         players_masked: np.ndarray,
         player_id: int,
         next_action: str,
+        previous_action: int,
         action_mask_shape=(26,),
     ):
         if next_action == "place":
             # must be either a card that is front of player
             mask_place = (players_masked[player_id] != 0).astype(np.int8)
             # discard hand card and reveal an masked card
-            mask_place2 = (players_masked[player_id] == 2).astype(np.int8)
+            if previous_action == 24:
+                mask_place2 = (players_masked[player_id] == 2).astype(np.int8)
+            else:
+                mask_place2 = np.zeros(players_masked[player_id].shape, dtype=np.int8)
             mask_draw = np.zeros(2, dtype=np.int8)
         else:  # draw
             # only draw allowed
@@ -354,6 +359,8 @@ class SkyjoGame(object):
             if last_action and self.last_round_initiator is None:
                 self.last_round_initiator = player_id
 
+        self.previous_action = action_int
+
         # Switch to the next expected action
         self._internal_next_action()
 
@@ -421,6 +428,9 @@ class SkyjoGame(object):
             self.players_masked[player_id][action_place_to_pos] = 1
             self.players_cards[player_id][action_place_to_pos] = self.hand_card
         else:
+            assert self.previous_action == 24, (
+                f"ILLEGAL ACTION. Can't place the card back on the discard pile."
+            )
             # discard hand card, reveal a yet unrevealed card
             place_pos = action_place_to_pos - 12
             assert self.players_masked[player_id][place_pos] == 2, (

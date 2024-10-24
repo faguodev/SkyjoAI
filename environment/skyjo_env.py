@@ -232,7 +232,6 @@ class SimpleSkyjoEnv(AECEnv):
             None: 
         """  
         current_agent = self.agent_selection
-        # player_id = self._name_to_player_id(current_agent)
 
         # if was done before
         if self.terminations[current_agent]:
@@ -253,8 +252,6 @@ class SimpleSkyjoEnv(AECEnv):
 
         # done
         self._accumulate_rewards()
-        #self._clear_rewards()
-        # self._deads_step_first()
 
         # prepare for next agent
         if not game_over:
