@@ -21,17 +21,11 @@ while i_episode <= 1:
         print(f"\n\n\n\n\n===================== Iteration {i} =====================")
         obs, reward, term, trunc, info = env_pettingzoo.last()
 
-        #print("training fct:", obs, reward, term, trunc, info)
         print(f"{term = }, {trunc = }")
-        # perform q-learning with update_Q_value()
-        # your code here
 
         print(env_pettingzoo.render())
 
         # store current state
-        # if not term and not trunc:
-            # choose action using epsilon_greedy_policy()
-            # your code here
         observation = obs["observations"]
         action_mask = obs["action_mask"]
         action = random_admissible_policy(observation, action_mask)
@@ -43,12 +37,3 @@ while i_episode <= 1:
             env_pettingzoo.step(None)
             print('done', reward)
             break
-        # else:
-        #     # agent is done
-        #     env_pettingzoo.step(None)
-        #     print('done', reward)
-        #     break
-
-#
-# else:
-#     print(env_pettingzoo._cumulative_rewards)
