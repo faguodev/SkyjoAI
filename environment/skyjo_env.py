@@ -239,8 +239,6 @@ class SimpleSkyjoEnv(AECEnv):
             return self._was_dead_step(None)
 
         game_over, last_action = self.table.act(current_agent, action_int=action)
-        if last_action:
-            pass
 
         # action done, rewards if game over
         if game_over:

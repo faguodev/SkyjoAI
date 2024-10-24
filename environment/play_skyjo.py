@@ -16,8 +16,9 @@ i_episode = 1
 while i_episode <= 1:
     i_episode += 1
     env_pettingzoo.reset()
-    for agent in env_pettingzoo.agent_iter(max_iter=6000):
+    for i, agent in enumerate(env_pettingzoo.agent_iter(max_iter=6000)):
         # get observation (state) for current agent:
+        print(f"\n\n\n\n\n===================== Iteration {i} =====================")
         obs, reward, term, trunc, info = env_pettingzoo.last()
 
         #print("training fct:", obs, reward, term, trunc, info)
@@ -35,6 +36,7 @@ while i_episode <= 1:
         action_mask = obs["action_mask"]
         action = random_admissible_policy(observation, action_mask)
 
+        print(f"{action_mask = }")
         print(f"sampled action {agent}: {action}")
         env_pettingzoo.step(action)
         if term:
@@ -47,6 +49,6 @@ while i_episode <= 1:
         #     print('done', reward)
         #     break
 
-
-else:
-    print(env_pettingzoo._cumulative_rewards)
+#
+# else:
+#     print(env_pettingzoo._cumulative_rewards)
