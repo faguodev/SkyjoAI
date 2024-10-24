@@ -329,6 +329,9 @@ class SkyjoGame(object):
             f"ILLEGAL ACTION: expected {self.expected_action[0]}"
             f" but requested was {player_id}"
         )
+        assert action_int != None, (
+            "ILLEGAL ACTION: None not supported"
+        )
         assert 0 <= action_int <= 25, f"action int {action_int} not in range(0,26)"
 
         if self.has_terminated:
