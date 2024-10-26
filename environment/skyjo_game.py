@@ -30,7 +30,7 @@ class SkyjoGame(object):
         self.score_penalty = score_penalty
 
         # hardcoded params
-        self.fill_masked_unk_value = 15
+        self.fill_masked_unknown_value = 15
         self.fill_masked_refunded_value = -14
         self.card_dtype = np.int8
         self._name_draw = "draw"
@@ -53,7 +53,7 @@ class SkyjoGame(object):
     def reset(self):
         # 150 cards from -2 to 12
         self.has_terminated = False
-        # If None, noone has initiated the last round, else the player_id is saved to indicate who revealed all cards first
+        # If None, no one has initiated the last round, else the player_id is saved to indicate who revealed all cards first
         self.last_round_initiator = None
         # metrics
         self.game_metrics = {
@@ -61,7 +61,7 @@ class SkyjoGame(object):
             "num_placed": [0] * self.num_players,
             "final_score": False,
         }
-        self.hand_card = self.fill_masked_unk_value
+        self.hand_card = self.fill_masked_unknown_value
         drawpile = self._new_drawpile(self.card_dtype)
         self.players_cards = drawpile[: 12 * self.num_players].reshape(
             self.num_players, -1
@@ -119,9 +119,9 @@ class SkyjoGame(object):
 
         self.actions = itertools.cycle(
             (
-                [action, player]
-                for action in range(self.num_players)
-                for player in [self._name_draw, self._name_place]
+                [player, action]
+                for player in range(self.num_players)
+                for action in [self._name_draw, self._name_place]
             )
         )
 
@@ -172,14 +172,14 @@ class SkyjoGame(object):
             player_obs = self._jit_known_player_cards(
                 self.players_cards,
                 self.players_masked,
-                fill_unknown=self.fill_masked_unk_value,
+                fill_unknown=self.fill_masked_unknown_value,
                 player_id=player_id,
             )
         else:
             player_obs = self._jit_known_player_cards_all(
                 self.players_cards,
                 self.players_masked,
-                fill_unknown=self.fill_masked_unk_value,
+                fill_unknown=self.fill_masked_unknown_value,
                 player_id=player_id,
             )
         # concat observation
@@ -214,12 +214,12 @@ class SkyjoGame(object):
         action_mask_shape=(26,),
     ):
         if next_action == "place":
-            # must be either a card that is front of player
+            # must be either a card that is front of player (0 is masking value for refunded cards)
             mask_place = (players_masked[player_id] != 0).astype(np.int8)
             # discard hand card and reveal an masked card
-            if previous_action == 24:
+            if previous_action == 24: # 24 is draw from drawpile
                 mask_place2 = (players_masked[player_id] == 2).astype(np.int8)
-            else:
+            else: # 25 is draw from discard pile
                 mask_place2 = np.zeros(players_masked[player_id].shape, dtype=np.int8)
             mask_draw = np.zeros(2, dtype=np.int8)
         else:  # draw
@@ -344,14 +344,14 @@ class SkyjoGame(object):
         game_over = False
         last_action = False
         if 24 <= action_int <= 25:
-            assert self.hand_card == self.fill_masked_unk_value, (
+            assert self.hand_card == self.fill_masked_unknown_value, (
                 "ILLEGAL ACTION. requested draw action"
                 f" {self.render_action_explainer(action_int)}"
                 f"already have a hand card {self.hand_card} "
             )
             self._action_draw_card(player_id, action_int)
         else:
-            assert self.hand_card != self.fill_masked_unk_value, (
+            assert self.hand_card != self.fill_masked_unknown_value, (
                 f"ILLEGAL ACTION. requested place action "
                 f"but not having a hand card {self.hand_card} "
             )
@@ -367,7 +367,7 @@ class SkyjoGame(object):
         # Switch to the next expected action
         self._internal_next_action()
 
-        # Check if that action belongs to the player that initiated the last round
+        # Check if the next action belongs to the player that initiated the last round
         if self.expected_action[0] == self.last_round_initiator:
             self.has_terminated = True
             self.game_metrics["final_score"] = self._evaluate_game(
@@ -390,11 +390,8 @@ class SkyjoGame(object):
             game over: bool winner_id
             final_scores: list(len(n_players)) if game over
         """
-        # perform goal check
-        # games end if any player has a open 12-card deck before picking up card.
-
-
-        # goal is not reached. continue drawing action
+        
+        # drawing action
         if draw_from == 24:
             # draw from drawpile
             if not self.drawpile:
@@ -462,7 +459,7 @@ class SkyjoGame(object):
 
         # action done
         self.game_metrics["num_placed"][player_id] += 1
-        self.hand_card = self.fill_masked_unk_value
+        self.hand_card = self.fill_masked_unknown_value
 
     # [end: perform actions]
 
