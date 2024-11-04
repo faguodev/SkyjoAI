@@ -5,7 +5,7 @@ from gym import spaces
 from pettingzoo import AECEnv
 from pettingzoo.utils import wrappers
 
-from skyjo_game import SkyjoGame
+from environment.skyjo_game import SkyjoGame
 
 DEFAULT_CONFIG = {
     "num_players": 3,

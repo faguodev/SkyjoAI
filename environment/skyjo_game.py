@@ -361,6 +361,9 @@ class SkyjoGame(object):
             last_action = self._player_goal_check(self.players_masked, player_id)
             if last_action and self.last_round_initiator is None:
                 self.last_round_initiator = player_id
+                
+            if self.last_round_initiator is not None:
+                last_action = True
 
         self.previous_action = action_int
 
@@ -374,9 +377,6 @@ class SkyjoGame(object):
                 self.players_cards, player_id, score_penalty=self.score_penalty
             )
             game_over = True
-        
-        if self.last_round_initiator is not None:
-            last_action = True
 
         return game_over, last_action
 
