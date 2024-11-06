@@ -92,14 +92,15 @@ class SkyjoGUI:
                             width=self.card_width, height=self.card_height, font=('Arial', 12))
             if self.game.expected_action[0] == player_idx:
                 # Enable buttons based on selection
-                if self.current_player == player_idx and self.player_grid_enabled:
+                if self.current_player == player_idx and self.player_grid_enabled and mask_value != 0:
                     btn.config(state='normal')
                 else:
                     btn.config(state='disabled')
                 btn.config(command=partial(self.place_card, idx))
             else:
                 btn.config(state='disabled')
-            btn.grid(row=idx // 4, column=idx % 4, padx=2, pady=2)  # Adjusted for 3 rows and 4 columns
+            btn.grid(row=idx % 3, column=idx // 3, padx=2, pady=2)
+
 
 
     def update_ui(self):
