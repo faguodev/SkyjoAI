@@ -114,6 +114,9 @@ class SimpleSkyjoEnv(AECEnv):
             observe_other_player_indirect=observe_other_player_indirect,
         )
 
+        #rewards stuff
+        self.final_reward, self.score_per_unknown = self.read_reward_params("reward_parameter.txt")
+
         # start PettingZoo API stuff
         self.render_mode = render_mode
         self.agents = [i for i in range(num_players)]
@@ -232,6 +235,10 @@ class SimpleSkyjoEnv(AECEnv):
             None: 
         """  
         current_agent = self.agent_selection
+        #Calculate Score before action
+        Card_sum_min, n_hidden_cards, stats_counts, top_discard, hand_card, player_obs= self.observe(current_agent)["observations"]
+        #all are arrays of length: 1, 1, 15, 1, 1, 12 or 12* num players
+        score_before = Card_sum_min[0] + self.score_per_unknown * n_hidden_cards[0]
 
         # if was done before
         if self.terminations[current_agent]:
@@ -239,6 +246,11 @@ class SimpleSkyjoEnv(AECEnv):
 
         game_over, last_action = self.table.act(current_agent, action_int=action)
 
+        #Calc score after action: first gather obs
+        Card_sum_min, n_hidden_cards, stats_counts, top_discard, hand_card, player_obs = self.observe(current_agent)[
+            "observations"]
+        score_after = Card_sum_min[0] + self.score_per_unkown * n_hidden_cards[0]
+        self.rewards = score_before - score_after
         # action done, rewards if game over
         if game_over:
             # current player has terminated the game for all. gather rewards
@@ -289,7 +301,58 @@ class SimpleSkyjoEnv(AECEnv):
         pass
 
     # start utils
+
+    def _calc_score(
+            self, Card_sum: np.array
+            (
+                [min(cards_sum.min(), 127)]  # (1,)
+                + [n_hidden.min()]  # (1,)
+                + stats_counts  # (15,)
+                + [top_discard]  # (1,)
+                + [self.hand_card]  # (1,)
+                + player_obs  # (12,) or (num_players * 12,)
+            ),
+            dtype=self.card_dtype,
+        )
+    ):
+        """Calculates Reward given after each step with scheme: Reward = Old_Score - New_Score
+         which leads to the agent trying to reduce the score the most possible in each
+         step
+
+         args:
+
+
+         returns:
+            reward: np.array [len(players)] e.g. np.array([0, 2, -3])
+
+         """
+
+
+        score
+
+        return score
     def _calc_final_rewards(
+        final_score: List[int], num_refunded: List[int], **kwargs
+    ):
+        """
+        get reward from score.
+        reward is 100 for winner and -100 for all loosers
+
+        args:
+            game_results: dict['str': np.array of len(players) e.g. np.array([35,65,50])
+
+        returns:
+            reward: np.array [len(players)] e.g. np.array([ 16,-14,+1])
+        """
+
+        final_scores = np.asarray(final_score)
+        winner = np.where(final_scores == np.min(final_scores))
+
+        rewards = np.asarray([100 if winner==i else -100 for i in range(len(final_scores))]) #should create an array of rewards
+                                                                         #either set to 100 if i==winner else to -100
+        return rewards
+
+    def _calc_final_rewards_old(
         self, final_score: List[int], num_refunded: List[int], **kwargs
     ):
         """
@@ -329,6 +392,16 @@ class SimpleSkyjoEnv(AECEnv):
         """implemented, get next player name for action from skyjo"""
         a = self.table.get_expected_action()
         return a[0], a[1]
+
+    def read_reward_params(file_name):
+
+        file = open(file_name, "r")
+        lines = file.readlines()
+
+        final_reward_value = float(lines[0].split(":")[1].strip())
+        score_per_unknown_card = float(lines[1].split(":")[1].strip())
+
+        return final_reward_value, score_per_unknown_card
 
     # end utils
 
