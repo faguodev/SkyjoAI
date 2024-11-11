@@ -302,37 +302,8 @@ class SimpleSkyjoEnv(AECEnv):
 
     # start utils
 
-    def _calc_score(
-            self, Card_sum: np.array
-            (
-                [min(cards_sum.min(), 127)]  # (1,)
-                + [n_hidden.min()]  # (1,)
-                + stats_counts  # (15,)
-                + [top_discard]  # (1,)
-                + [self.hand_card]  # (1,)
-                + player_obs  # (12,) or (num_players * 12,)
-            ),
-            dtype=self.card_dtype,
-        )
-    ):
-        """Calculates Reward given after each step with scheme: Reward = Old_Score - New_Score
-         which leads to the agent trying to reduce the score the most possible in each
-         step
-
-         args:
-
-
-         returns:
-            reward: np.array [len(players)] e.g. np.array([0, 2, -3])
-
-         """
-
-
-        score
-
-        return score
     def _calc_final_rewards(
-        final_score: List[int], num_refunded: List[int], **kwargs
+            self, final_score: List[int], **kwargs
     ):
         """
         get reward from score.
@@ -348,8 +319,9 @@ class SimpleSkyjoEnv(AECEnv):
         final_scores = np.asarray(final_score)
         winner = np.where(final_scores == np.min(final_scores))
 
-        rewards = np.asarray([100 if winner==i else -100 for i in range(len(final_scores))]) #should create an array of rewards
-                                                                         #either set to 100 if i==winner else to -100
+        rewards = np.asarray([self.final_reward if winner == i else -self.final_reward for i in
+                              range(len(final_scores))])  # should create an array of rewards
+        # either set to 100 if i==winner else to -100
         return rewards
 
     def _calc_final_rewards_old(
