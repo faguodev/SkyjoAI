@@ -236,9 +236,9 @@ class SimpleSkyjoEnv(AECEnv):
         """  
         current_agent = self.agent_selection
         #Calculate Score before action
-        Card_sum_min, n_hidden_cards, stats_counts, top_discard, hand_card, player_obs= self.observe(current_agent)["observations"]
-        #all are arrays of length: 1, 1, 15, 1, 1, 12 or 12* num players
-        score_before = Card_sum_min[0] + self.score_per_unknown * n_hidden_cards[0]
+        n_hidden_cards, Card_sum= self.table.collect_hidden_card_sums() #both should be arrays of length: num players
+        assert(len(n_hidden_cards) == len(Card_sum) and len(n_hidden_cards) == self.num_players)
+        score_before = Card_sum[current_agent] + self.score_per_unknown * n_hidden_cards[current_agent]
 
         # if was done before
         if self.terminations[current_agent]:
@@ -247,9 +247,8 @@ class SimpleSkyjoEnv(AECEnv):
         game_over, last_action = self.table.act(current_agent, action_int=action)
 
         #Calc score after action: first gather obs
-        Card_sum_min, n_hidden_cards, stats_counts, top_discard, hand_card, player_obs = self.observe(current_agent)[
-            "observations"]
-        score_after = Card_sum_min[0] + self.score_per_unkown * n_hidden_cards[0]
+        n_hidden_cards, Card_sum = self.table.collect_hidden_card_sums()
+        score_after = Card_sum[current_agent] + self.score_per_unkown * n_hidden_cards[current_agent]
         self.rewards = score_before - score_after
         # action done, rewards if game over
         if game_over:

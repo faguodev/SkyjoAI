@@ -204,6 +204,26 @@ class SkyjoGame(object):
         )
         return obs, action_mask
 
+    def collect_hidden_card_sums(self) -> Tuple[np.array, np.array]:
+        """
+        Returns array of number of hidden cards of each player (np.array[]) +
+            the card sums of each player (np.array[])
+        """
+        # get global stats
+        (
+            stats_counts,
+            cards_sum,
+            n_hidden,
+            top_discard,
+        ) = self._jit_observe_global_game_stats(
+            self.players_cards,
+            self.players_masked,
+            np.array(self.discard_pile, dtype=self.players_cards.dtype),
+            count_players_cards=not self.observe_other_player_indirect,
+        )
+
+        return n_hidden, cards_sum
+
     @staticmethod
     @njit(fastmath=True)
     def _jit_action_mask(
