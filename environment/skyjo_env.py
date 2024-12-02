@@ -145,12 +145,7 @@ class SimpleSkyjoEnv(AECEnv):
                 )
             }
         )
-        self._action_spaces = spaces.Dict(
-            {
-                agent_id: spaces.Discrete(self.table.action_mask_shape[0])
-                for agent_id in self.possible_agents
-            }
-        )
+        self._action_spaces = spaces.Discrete(self.table.action_mask_shape[0])
         # end obs / actions space
         # end PettingZoo API stuff
 
@@ -180,7 +175,27 @@ class SimpleSkyjoEnv(AECEnv):
         Returns:
             gym.space: observation_space of agent
         """
-        return self._observation_spaces[agent]
+        obs_space = spaces.Dict(
+            {
+                "observations": spaces.Box(
+                    low=-24,
+                    high=127,
+                    shape=self.table.obs_shape,
+                    dtype=self.table.card_dtype,
+                ),
+                "action_mask": spaces.Box(
+                    low=0,
+                    high=1,
+                    shape=self.table.action_mask_shape,
+                    dtype=np.int8,
+                )
+            }
+        )
+        print(f"Obs shape: {self.table.obs_shape}, type: {type(self.table.obs_shape)}")
+        print(f"Action mask shape: {self.table.action_mask_shape}, type: {type(self.table.action_mask_shape)}")
+        print(f"Observation space for agent {agent}: {obs_space}")
+        return obs_space
+        # return self._observation_spaces#[agent]
 
     def action_space(self, agent):
         """part of the PettingZoo API
@@ -195,8 +210,9 @@ class SimpleSkyjoEnv(AECEnv):
 
         Returns:
             [type]: [description]
-        """        
-        return self._action_spaces[agent]
+        """
+        return spaces.Discrete(self.table.action_mask_shape[0])
+        # return self._action_spaces#[agent]
 
     def observe(self, agent: str) -> Dict[str,np.ndarray]:
         """
