@@ -30,7 +30,7 @@ def env(**kwargs):
 class SimpleSkyjoEnv(AECEnv):
 
     metadata = {
-        "render_modes": ["human"],
+        "render_modes": ["human", None],
         "name": "skyjo",
         "is_parallelizable": False,
         "video.frames_per_second": 1,
@@ -115,7 +115,7 @@ class SimpleSkyjoEnv(AECEnv):
         )
 
         #rewards stuff
-        self.final_reward, self.score_per_unknown = self.read_reward_params("reward_parameter.txt")
+        self.final_reward, self.score_per_unknown = self.read_reward_params("/home/henry/Documents/SharedDocuments/Uni/TU/3.Semester/AdvRL/SkyjoAI/environment/reward_parameter.txt")
 
         # start PettingZoo API stuff
         self.render_mode = render_mode
@@ -131,23 +131,18 @@ class SimpleSkyjoEnv(AECEnv):
 
         self._observation_spaces = spaces.Dict(
             {
-                agent_id: spaces.Dict(
-                    {
-                        "observations": spaces.Box(
-                            low=-24,
-                            high=127,
-                            shape=self.table.obs_shape,
-                            dtype=self.table.card_dtype,
-                        ),
-                        "action_mask": spaces.Box(
-                            low=0,
-                            high=1,
-                            shape=self.table.action_mask_shape,
-                            dtype=np.int8,
-                        ),
-                    }
+                "observations": spaces.Box(
+                    low=-24,
+                    high=127,
+                    shape=self.table.obs_shape,
+                    dtype=self.table.card_dtype,
+                ),
+                "action_mask": spaces.Box(
+                    low=0,
+                    high=1,
+                    shape=self.table.action_mask_shape,
+                    dtype=np.int8,
                 )
-                for agent_id in self.possible_agents
             }
         )
         self._action_spaces = spaces.Dict(
@@ -364,7 +359,7 @@ class SimpleSkyjoEnv(AECEnv):
         a = self.table.get_expected_action()
         return a[0], a[1]
 
-    def read_reward_params(file_name):
+    def read_reward_params(self, file_name):
 
         file = open(file_name, "r")
         lines = file.readlines()
