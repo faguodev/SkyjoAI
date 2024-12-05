@@ -1,7 +1,7 @@
 from typing import List, Dict
 
 import numpy as np
-from gym import spaces
+from gymnasium import spaces
 from pettingzoo import AECEnv
 from pettingzoo.utils import wrappers
 
@@ -43,6 +43,8 @@ class SimpleSkyjoEnv(AECEnv):
         observe_other_player_indirect: bool = False,
         mean_reward: float = 1.0,
         reward_refunded: float = 0.0,
+        final_reward: float = 100.0,
+        score_per_unknown: float = 5.0,
         render_mode = None
     ):
         """
@@ -107,15 +109,14 @@ class SimpleSkyjoEnv(AECEnv):
         self.num_players = num_players
         self.mean_reward = mean_reward
         self.reward_refunded = reward_refunded
+        self.final_reward = final_reward
+        self.score_per_unknown = score_per_unknown
 
         self.table = SkyjoGame(
             num_players,
             score_penalty=score_penalty,
             observe_other_player_indirect=observe_other_player_indirect,
         )
-
-        #rewards stuff
-        self.final_reward, self.score_per_unknown = self.read_reward_params("/home/henry/Documents/SharedDocuments/Uni/TU/3.Semester/AdvRL/SkyjoAI/environment/reward_parameter.txt")
 
         # start PettingZoo API stuff
         self.render_mode = render_mode
@@ -129,27 +130,32 @@ class SimpleSkyjoEnv(AECEnv):
         self.truncations = self._convert_to_dict([False for _ in range(self.num_agents)])
         self.infos = {i: {} for i in self.agents}
 
-        self._observation_spaces = spaces.Dict(
-            {
-                "observations": spaces.Box(
-                    low=-24,
-                    high=127,
-                    shape=self.table.obs_shape,
-                    dtype=self.table.card_dtype,
-                ),
-                "action_mask": spaces.Box(
-                    low=0,
-                    high=1,
-                    shape=self.table.action_mask_shape,
-                    dtype=np.int8,
+        self._observation_spaces = self._convert_to_dict(
+            [
+                spaces.Dict(
+                    {
+                        "observations": spaces.Box(
+                            low=-24,
+                            high=127,
+                            shape=self.table.obs_shape,
+                            dtype=self.table.card_dtype,
+                        ),
+                        "action_mask": spaces.Box(
+                            low=0,
+                            high=1,
+                            shape=self.table.action_mask_shape,
+                            dtype=np.int8,
+                        ),
+                    }
                 )
-            }
+                for _ in self.possible_agents
+            ]
         )
-        self._action_spaces = spaces.Dict(
-            {
-                agent_id: spaces.Discrete(self.table.action_mask_shape[0])
-                for agent_id in self.possible_agents
-            }
+        self._action_spaces = self._convert_to_dict(
+            [
+                spaces.Discrete(self.table.action_mask_shape[0])
+                for _ in self.possible_agents
+            ]
         )
         # end obs / actions space
         # end PettingZoo API stuff
@@ -243,7 +249,7 @@ class SimpleSkyjoEnv(AECEnv):
 
         #Calc score after action: first gather obs
         n_hidden_cards, Card_sum = self.table.collect_hidden_card_sums()
-        score_after = Card_sum[current_agent] + self.score_per_unkown * n_hidden_cards[current_agent]
+        score_after = Card_sum[current_agent] + self.score_per_unknown * n_hidden_cards[current_agent]
         self.rewards = score_before - score_after
         # action done, rewards if game over
         if game_over:

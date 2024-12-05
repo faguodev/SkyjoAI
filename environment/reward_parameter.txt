@@ -1,2 +1,0 @@
-Value of final reward: 100
-Score per unknown Card: 4
