@@ -201,7 +201,7 @@ class SimpleSkyjoEnv(AECEnv):
 
         Returns:
             [type]: [description]
-        """        
+        """
         return self._action_spaces[agent]
 
     def observe(self, agent: str) -> Dict[str,np.ndarray]:
