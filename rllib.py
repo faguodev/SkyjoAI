@@ -3,6 +3,22 @@ from ray.rllib.env.wrappers.pettingzoo_env import PettingZooEnv
 from ray.rllib.algorithms.ppo import PPOConfig
 
 from environment.skyjo_env import env as skyjo_env
+from ray.rllib.algorithms.callbacks import DefaultCallbacks
+import logging
+
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+
+class RewardDecayCallback(DefaultCallbacks):
+    def on_train_result(self, *, algorithm, result, **kwargs):
+        # Decay the reward scaling factor over training iterations
+        action_reward_decay = max(0.05, 1.0 - result["training_iteration"] * 0.01)
+        env = algorithm.workers.local_worker().env
+        env.update_action_reward_decay(action_reward_decay)
+        logger.info(action_reward_decay)
+
 
 skyjo_config = {
     "num_players": 3,
@@ -24,10 +40,12 @@ register_env("skyjo", env_creator)
 config = (
     PPOConfig()
     .environment("skyjo", env_config=skyjo_config)
+    .callbacks(RewardDecayCallback)
     .env_runners(
-        num_env_runners=2,
+        num_env_runners=1,
     )
-    .evaluation(evaluation_num_env_runners=1)
+    .evaluation(evaluation_num_env_runners=0)
+    .debugging(log_level="INFO")
 )
 
 algo = config.build()

@@ -45,6 +45,8 @@ class SimpleSkyjoEnv(AECEnv):
         reward_refunded: float = 0.0,
         final_reward: float = 100.0,
         score_per_unknown: float = 5.0,
+        action_reward_decay: float = 1.0,
+        final_reward_offest: float = 0.0,
         render_mode = None
     ):
         """
@@ -110,6 +112,8 @@ class SimpleSkyjoEnv(AECEnv):
         self.mean_reward = mean_reward
         self.reward_refunded = reward_refunded
         self.final_reward = final_reward
+        self.action_reward_reduction = action_reward_decay
+        self.final_reward_offest = final_reward_offest
         self.score_per_unknown = score_per_unknown
 
         self.table = SkyjoGame(
@@ -122,6 +126,7 @@ class SimpleSkyjoEnv(AECEnv):
         self.render_mode = render_mode
         self.agents = [i for i in range(num_players)]
         self.possible_agents = self.agents[:]
+        self.rewards = {agent: 0 for agent in self.agents}
 
         self.agent_selection = self._expected_agentname_and_action()[0]
 
@@ -159,6 +164,10 @@ class SimpleSkyjoEnv(AECEnv):
         )
         # end obs / actions space
         # end PettingZoo API stuff
+
+    def update_action_reward_decay(self, action_reward_decay):
+        self.action_reward_decay = action_reward_decay
+        print(action_reward_decay)
 
     def observation_space(self, agent):
         """
@@ -237,9 +246,9 @@ class SimpleSkyjoEnv(AECEnv):
         """  
         current_agent = self.agent_selection
         #Calculate Score before action
-        n_hidden_cards, Card_sum= self.table.collect_hidden_card_sums() #both should be arrays of length: num players
-        assert(len(n_hidden_cards) == len(Card_sum) and len(n_hidden_cards) == self.num_players)
-        score_before = Card_sum[current_agent] + self.score_per_unknown * n_hidden_cards[current_agent]
+        _, card_sum = self.table.collect_hidden_card_sums() #both should be arrays of length: num players
+        # assert(len(n_hidden_cards) == len(card_sum) and len(n_hidden_cards) == self.num_players)
+        score_before = card_sum[current_agent] #+ self.score_per_unknown * n_hidden_cards[current_agent]
 
         # if was done before
         if self.terminations[current_agent]:
@@ -248,20 +257,26 @@ class SimpleSkyjoEnv(AECEnv):
         game_over, last_action = self.table.act(current_agent, action_int=action)
 
         #Calc score after action: first gather obs
-        n_hidden_cards, Card_sum = self.table.collect_hidden_card_sums()
-        score_after = Card_sum[current_agent] + self.score_per_unknown * n_hidden_cards[current_agent]
-        self.rewards = score_before - score_after
+        # n_hidden_cards, card_sum = self.table.collect_hidden_card_sums()
+        score_after = card_sum[current_agent] #+ self.score_per_unknown * n_hidden_cards[current_agent]
+        if last_action:
+            self.rewards[current_agent] = self.final_reward_offest - card_sum[current_agent]
+        else:
+            self.rewards[current_agent] = self.action_reward_reduction * (score_before - score_after)
+
         # action done, rewards if game over
         if game_over:
+            # I don't think this is needed? - henry
             # current player has terminated the game for all. gather rewards
-            self.rewards = self._convert_to_dict(
-                self._calc_final_rewards(**(self.table.get_game_metrics()))
-            )
+            # self.rewards = self._convert_to_dict(
+            #     self._calc_final_rewards(**(self.table.get_game_metrics()))
+            # )
             self.terminations = {i: True for i in self.agents}
 
         if last_action:
             self.truncations[current_agent] = True
 
+        # This should only be called once after one round, right? - henry
         # done
         self._accumulate_rewards()
 
