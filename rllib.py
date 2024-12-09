@@ -6,6 +6,8 @@ from environment.skyjo_env import env as skyjo_env
 from ray.rllib.algorithms.callbacks import DefaultCallbacks
 import logging
 
+from models.action_mask_model import TorchActionMaskModel
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -31,6 +33,10 @@ skyjo_config = {
     "render_mode": "human",
 }
 
+model_config = {
+    'custom_model': TorchActionMaskModel 
+}
+
 def env_creator(config):
     return PettingZooEnv(skyjo_env(**config))
 
@@ -39,8 +45,11 @@ register_env("skyjo", env_creator)
 
 config = (
     PPOConfig()
+    .training(model=model_config)
     .environment("skyjo", env_config=skyjo_config)
-    .callbacks(RewardDecayCallback)
+    .framework('torch')
+    .training(model=model_config)
+    #.callbacks(RewardDecayCallback)
     .env_runners(
         num_env_runners=1,
     )
@@ -56,5 +65,5 @@ for i in range(10):
     print(result)
 
     if i % 5 == 0:
-        checkpoint_dir = algo.save_to_path()
-        print(f"Checkpoint saved in directory {checkpoint_dir}")
+        #checkpoint_dir = algo.save_to_path()
+        print(f"Checkpoint happened")
