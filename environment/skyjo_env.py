@@ -47,6 +47,7 @@ class SimpleSkyjoEnv(AECEnv):
         score_per_unknown: float = 5.0,
         action_reward_decay: float = 1.0,
         final_reward_offest: float = 0.0,
+        old_reward: bool = False,
         render_mode = None
     ):
         """
@@ -115,6 +116,7 @@ class SimpleSkyjoEnv(AECEnv):
         self.action_reward_reduction = action_reward_decay
         self.final_reward_offest = final_reward_offest
         self.score_per_unknown = score_per_unknown
+        self.old_reward = old_reward
 
         self.table = SkyjoGame(
             num_players,
@@ -257,20 +259,22 @@ class SimpleSkyjoEnv(AECEnv):
         game_over, last_action = self.table.act(current_agent, action_int=action)
 
         #Calc score after action: first gather obs
-        # n_hidden_cards, card_sum = self.table.collect_hidden_card_sums()
-        score_after = card_sum[current_agent] #+ self.score_per_unknown * n_hidden_cards[current_agent]
-        if last_action:
-            self.rewards[current_agent] = self.final_reward_offest - card_sum[current_agent]
-        else:
-            self.rewards[current_agent] = self.action_reward_reduction * (score_before - score_after)
+        n_hidden_cards, card_sum = self.table.collect_hidden_card_sums()
+        if not self.old_reward:
+            score_after = card_sum[current_agent] #+ self.score_per_unknown * n_hidden_cards[current_agent]
+            if last_action:
+                self.rewards[current_agent] = self.final_reward_offest - card_sum[current_agent]
+            else:
+                self.rewards[current_agent] = self.action_reward_reduction * (score_before - score_after)
 
         # action done, rewards if game over
         if game_over:
             # I don't think this is needed? - henry
             # current player has terminated the game for all. gather rewards
-            # self.rewards = self._convert_to_dict(
-            #     self._calc_final_rewards(**(self.table.get_game_metrics()))
-            # )
+            if self.old_reward:
+                self.rewards = self._convert_to_dict(
+                    self._calc_final_rewards(**(self.table.get_game_metrics()))
+                )
             self.terminations = {i: True for i in self.agents}
 
         if last_action:
@@ -334,7 +338,7 @@ class SimpleSkyjoEnv(AECEnv):
         final_scores = np.asarray(final_score)
         winner = np.where(final_scores == np.min(final_scores))
 
-        rewards = np.asarray([self.final_reward if winner == i else -self.final_reward for i in
+        rewards = np.asarray([self.final_reward if i == winner[0][0] else -self.final_reward for i in
                               range(len(final_scores))])  # should create an array of rewards
         # either set to 100 if i==winner else to -100
         return rewards

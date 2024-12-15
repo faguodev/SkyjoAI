@@ -34,6 +34,7 @@ skyjo_config = {
     "final_reward": 100,
     "score_per_unknown": 5.0,
     "action_reward_decay": 1.0,
+    "old_reward": False,
     "render_mode": "human",
 }
 
@@ -86,10 +87,10 @@ def convert_to_serializable(obj):
         return obj.tolist()
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
-model_save_dir = "trained_models"
+model_save_dir = "v2_trained_models_new_rewards"
 os.makedirs(model_save_dir, exist_ok=True)
-max_steps = 1e8
-max_iters = 1000
+max_steps = 1e10
+max_iters = 100000
 for iters in range(max_iters):
     result = algo.train()
     if iters % 100 == 0:
