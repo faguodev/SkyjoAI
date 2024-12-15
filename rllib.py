@@ -1,5 +1,3 @@
-import os
-
 from ray.tune.registry import register_env
 from ray.rllib.env.wrappers.pettingzoo_env import PettingZooEnv
 from ray.rllib.algorithms.ppo import PPOConfig
@@ -7,8 +5,8 @@ from ray.rllib.algorithms.ppo import PPOConfig
 from environment.skyjo_env import env as skyjo_env
 from ray.rllib.algorithms.callbacks import DefaultCallbacks
 import logging
-import json
 import numpy as np
+import os
 
 from models.action_mask_model import TorchActionMaskModel
 
@@ -68,8 +66,8 @@ config = (
     .multi_agent(
         policies={
             "policy_0": (None, obs_space[0], act_space[0], {"entropy_coeff":0.01}),
-            "policy_1": (None, obs_space[1], act_space[1], {"entropy_coeff":0.05}),
-            "policy_2": (None, obs_space[2], act_space[2], {"entropy_coeff":0.1})
+            "policy_1": (None, obs_space[1], act_space[1], {"entropy_coeff":0.01}),
+            "policy_2": (None, obs_space[2], act_space[2], {"entropy_coeff":0.01})
         },
         policy_mapping_fn=policy_mapping_fn,#(lambda agent_id, *args, **kwargs: agent_id),
     )
@@ -78,7 +76,6 @@ config = (
 )
 
 algo = config.build()
-
 
 def convert_to_serializable(obj):
     """Convert non-serializable objects to serializable types."""
@@ -90,16 +87,22 @@ def convert_to_serializable(obj):
         return obj.tolist()
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
-
-if not os.path.exists("logs3"):
-    os.mkdir("logs3")
-
-for i in range(1000):
+model_save_dir = "trained_models"
+os.makedirs(model_save_dir, exist_ok=True)
+max_steps = 1e8
+max_iters = 1000
+for iters in range(max_iters):
     result = algo.train()
-    result.pop("config")
-    print(result)
+    if iters % 100 == 0:
+        checkpoint_dir = model_save_dir + f"/checkpoint_{iters}"
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        algo.save(checkpoint_dir)
+    if result["timesteps_total"] >= max_steps:
+        print(f"training done, because max_steps {max_steps} {result['timesteps_total']} reached")
+        break
+else:
+    print(f"training done, because max_iters {max_iters} reached")
 
-    if i % 5 == 0:
-        # Save result to JSON file
-        with open(f"logs3/result_iteration_{i}.json", "w") as f:
-            json.dump(result, f, indent=4, default=convert_to_serializable)
+final_dir = model_save_dir + f"/final"
+os.makedirs(final_dir, exist_ok=True)
+algo.save(final_dir)
