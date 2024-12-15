@@ -46,6 +46,7 @@ def env_creator(config):
 
 register_env("skyjo", env_creator)
 
+
 test_env = env_creator(skyjo_config)
 obs_space = test_env.observation_space
 act_space = test_env.action_space
@@ -75,33 +76,80 @@ config = (
 )
 
 algo = config.build()
+algo_new = config.build()
 
-def convert_to_serializable(obj):
-    """Convert non-serializable objects to serializable types."""
-    if isinstance(obj, (np.float32, np.float64)):
-        return float(obj)
-    elif isinstance(obj, np.integer):
-        return int(obj)
-    elif isinstance(obj, np.ndarray):
-        return obj.tolist()
-    raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
-
-model_save_dir = "trained_models"
-os.makedirs(model_save_dir, exist_ok=True)
-max_steps = 1e8
-max_iters = 1000
-for iters in range(max_iters):
-    result = algo.train()
-    if iters % 100 == 0:
-        checkpoint_dir = model_save_dir + f"/checkpoint_{iters}"
-        os.makedirs(checkpoint_dir, exist_ok=True)
-        algo.save(checkpoint_dir)
-    if result["timesteps_total"] >= max_steps:
-        print(f"training done, because max_steps {max_steps} {result['timesteps_total']} reached")
-        break
-else:
-    print(f"training done, because max_iters {max_iters} reached")
-
+model_save_dir = "trained_models_old_rewards"
+model_save_dir_new = "trained_models"
 final_dir = model_save_dir + f"/final"
-os.makedirs(final_dir, exist_ok=True)
-algo.save(final_dir)
+final_dir_new = model_save_dir_new + f"/final"
+
+algo.restore(final_dir)
+algo_new.restore(final_dir_new)
+
+env_pettingzoo = skyjo_env(**skyjo_config)
+env_pettingzoo.reset()
+
+def random_admissible_policy(observation, action_mask):
+    """picks randomly an admissible action from the action mask"""
+    return np.random.choice(
+        np.arange(len(action_mask)),
+        p= action_mask/np.sum(action_mask)
+    )
+
+wins_dict = {
+    0: 0,
+    1: 0,
+    2: 0
+}
+
+i_episode = 1
+while i_episode <= 10000:
+    print("=============================")
+    print(f"Iteration {i_episode}")
+    i_episode += 1
+    env_pettingzoo.reset()
+    for i, agent in enumerate(env_pettingzoo.agent_iter(max_iter=6000)):
+        # get observation (state) for current agent:
+        #print(f"\n\n\n\n\n===================== Iteration {i} =====================")
+        obs, reward, term, trunc, info = env_pettingzoo.last()
+
+        #print(f"{term = }, {trunc = }")
+
+        #print(env_pettingzoo.render())
+
+        # store current state
+        observation = obs["observations"]
+        action_mask = obs["action_mask"]
+        
+        if agent == 0:
+            action = random_admissible_policy(observation, action_mask)
+        elif agent == 1:
+            policy = algo.get_policy(policy_id=policy_mapping_fn(agent, None))
+            action_exploration_policy, _, action_info = policy.compute_single_action(obs)
+            # 
+            action = action_exploration_policy
+        elif agent == 2:
+            policy = algo_new.get_policy(policy_id=policy_mapping_fn(agent, None))
+            action_exploration_policy, _, action_info = policy.compute_single_action(obs)
+            # 
+            action = action_exploration_policy
+
+        #print(f"{action_mask = }")
+        #print(f"sampled action {agent}: {action}")
+        env_pettingzoo.step(action)
+        if term:
+            env_pettingzoo.step(None)
+            #print('done', reward)
+            final_scores = env_pettingzoo.table.get_game_metrics()["final_score"]
+
+            winner = np.argmin(final_scores)
+
+            #print("========================")
+            #print("AND THE WINNER IS")
+            #print(winner)
+            wins_dict[winner] = wins_dict[winner] + 1
+            break
+
+print(wins_dict)
+
+

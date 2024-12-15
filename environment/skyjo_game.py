@@ -344,7 +344,7 @@ class SkyjoGame(object):
         """
 
         # Check if player_id and action_int are as expected
-        print(f"{player_id = }, {action_int = }")
+        #print(f"{player_id = }, {action_int = }")
         assert self.expected_action[0] == player_id, (
             f"ILLEGAL ACTION: expected {self.expected_action[0]}"
             f" but requested was {player_id}"

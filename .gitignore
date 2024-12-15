@@ -1,2 +1,4 @@
 .idea/*
 *.pyc
+trained_models
+trained_models_old_rewards
