@@ -2,3 +2,5 @@
 *.pyc
 trained_models
 trained_models_old_rewards
+v2_trained_models_new_rewards
+v2_trained_models_old_rewards
