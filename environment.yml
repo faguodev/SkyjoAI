@@ -1,4 +1,4 @@
-name: skyjo
+name: skyjo2
 channels:
   - conda-forge
   - defaults
@@ -141,4 +141,4 @@ dependencies:
       - typer==0.12.5
       - tzdata==2024.2
       - urllib3==2.2.3
-prefix: /home/florian/miniconda3/envs/skyjo
+prefix: /home/florian/miniconda3/envs/skyjo2

@@ -4,106 +4,207 @@ from functools import partial
 import random
 from environment.skyjo_game import SkyjoGame
 
-from ray.tune.registry import register_env
-from ray.rllib.env.wrappers.pettingzoo_env import PettingZooEnv
-from ray.rllib.algorithms.ppo import PPOConfig
-
 from environment.skyjo_env import env as skyjo_env
-from ray.rllib.algorithms.callbacks import DefaultCallbacks
 import logging
 
-from models.action_mask_model import TorchActionMaskModel
-
-def random_admissible_policy(obs):
-    observation = obs["observations"]
-    action_mask = obs["action_mask"]
-    admissible_actions = [i for i, mask in enumerate(action_mask) if mask == 1]
-    return random.choice(admissible_actions)
+import numpy as np
+from stable_baselines3 import PPO
 
 
+##############################
+# GLOBAL STATE: TURN COUNTER
+##############################
+global_turn_count = 0
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-
-
-class RewardDecayCallback(DefaultCallbacks):
-    def on_train_result(self, *, algorithm, result, **kwargs):
-        # Decay the reward scaling factor over training iterations
-        action_reward_decay = max(0.05, 1.0 - result["training_iteration"] * 0.005)
-        # env = algorithm.workers.local_worker().env
-        # env = algorithm.workers.local_env_runner.env
-        algorithm.config.env_config["action_reward_decay"] = action_reward_decay
-        logger.info(action_reward_decay)
-
-skyjo_config_old = {
-    "num_players": 3,
-    "score_penalty": 2.0,
-    "observe_other_player_indirect": True,
-    "mean_reward": 1.0,
-    "reward_refunded": 10,
-    "final_reward": 100,
-    "score_per_unknown": 5.0,
-    "action_reward_decay": 1.0,
-    "old_reward": True,
-    "render_mode": "human",
-}
-
-model_config = {
-    'custom_model': TorchActionMaskModel 
-}
-
-def env_creator(config):
-    return PettingZooEnv(skyjo_env(**config))
-
-register_env("skyjo", env_creator)
-
-test_env = env_creator(skyjo_config_old)
-obs_space = test_env.observation_space
-act_space = test_env.action_space
-
-def policy_mapping_fn(agent_id, _, **kwargs):
-    return "policy_" + str(agent_id) #int(agent_id.split("_")[-1])
-
-config_old = (
-    PPOConfig()
-    .training(model=model_config, )
-    .environment("skyjo", env_config=skyjo_config_old)
-    .framework('torch')
-    .callbacks(RewardDecayCallback)
-    .env_runners(num_env_runners=1)
-    # .rollouts(num_rollout_workers=6)
-    .resources(num_gpus=0)
-    .multi_agent(
-        policies={
-            "policy_0": (None, obs_space[0], act_space[0], {"entropy_coeff":0}),
-            "policy_1": (None, obs_space[1], act_space[1], {"entropy_coeff":0}),
-            "policy_2": (None, obs_space[2], act_space[2], {"entropy_coeff":0})
-        },
-        policy_mapping_fn=policy_mapping_fn,#(lambda agent_id, *args, **kwargs: agent_id),
-    )
-    .evaluation(evaluation_num_env_runners=0)
-    .debugging(log_level="INFO")
-)
-
-algo_old = config_old.build()
-model_save_dir_old = "v2_trained_models_old_rewards"
-final_dir_old = model_save_dir_old + f"/checkpoint_3000"
-algo_old.restore(final_dir_old)
-
-def policy_two(obs):
-    policy = algo_old.get_policy(policy_id=policy_mapping_fn(0, None))
-    action_exploration_policy, _, action_info = policy.compute_single_action(obs)
-    # 
-    action = action_exploration_policy
-    return action
+##############################
+# LOAD YOUR SB3 MODEL
+##############################
+# Suppose you have a model saved at "PPO_1M_multi.zip"
+sb3_model_path = "PPO_1M_multi.zip"
+model_env2 = PPO.load(sb3_model_path)
 
 
-def policy_one(obs):
-    policy = algo_old.get_policy(policy_id=policy_mapping_fn(1, None))
-    action_exploration_policy, _, action_info = policy.compute_single_action(obs)
-    # 
-    action = action_exploration_policy
-    return action
+##############################
+# OBSERVATION MAPPING
+##############################
+def obs_one_to_obs_two(obs_one: dict, turn_counter: int) -> np.ndarray:
+    """
+    Convert Environment One observation dict into an Environment Two–style observation.
+
+    For a 2-player game in Environment One (PettingZoo):
+      obs_one["observations"] might have length 43:
+        - Indices:
+          3 -> discard_top
+          4 -> deck_card
+          19..31 -> 12 cards for player0
+          31..43 -> 12 cards for player1
+
+    We’ll build a single array of length 27:
+      [discard_top, turn_counter, deck_card, 12 board vals (player0), 12 board vals (player1)]
+
+    Hidden/refunded cards = 15 or -14 => we turn them into 5.0 for environment Two.
+    """
+    obs_vec = obs_one["observations"]
+    print("obs_vec")
+    print(obs_vec)
+    discard_top = obs_vec[17]
+    deck_card   = obs_vec[18]
+
+    # Grab the 12 cards for player0
+    raw_board_p0 = obs_vec[19:31]
+    board_int_p0 = []
+    for val in raw_board_p0:
+        if val == 15:
+            board_int_p0.append(5.0)
+        
+        elif val == -14:  # Hidden/refunded
+            board_int_p0.append(0.0)
+        else:
+            board_int_p0.append(float(val))
+
+    # Grab the 12 cards for player1
+    raw_board_p1 = obs_vec[31:43]
+    board_int_p1 = []
+    for val in raw_board_p1:
+        if val == 15 or val == -14:
+            board_int_p1.append(5.0)
+        else:
+            board_int_p1.append(float(val))
+
+    state = float(turn_counter)
+
+    obs_env2 = np.concatenate((
+        np.array([discard_top, state, deck_card], dtype=np.float32),
+        np.array(board_int_p0, dtype=np.float32),
+        np.array(board_int_p1, dtype=np.float32),
+    ))
+
+    print("obs_env")
+    print(obs_env2)
+
+    return obs_env2
+
+
+##############################
+# ACTION MAPPING
+##############################
+def act_two_to_act_one(action_two: np.ndarray, expected_action: str, obs_one: dict) -> int:
+    """
+    Convert the (2,) action from environment Two to a single integer action for environment One.
+
+    action_two[0]: 0=draw from deck, 1=take from discard
+    action_two[1]: 0..11=place at position, 12=discard & reveal
+
+    Environment One action mapping:
+    - expected_action="draw": 
+        if draw_or_take=0 -> 24 (draw from deck)
+        if draw_or_take=1 -> 25 (take from discard)
+    - expected_action="place":
+        if place_or_discover<12 -> place that position (0..11)
+        if place_or_discover=12 -> reveal a random masked card:
+            valid reveal actions are 12..23, filtered by action_mask.
+    """
+    draw_or_take = action_two[0]
+    place_or_discover = action_two[1]
+
+    if expected_action == "draw":
+        global global_turn_count
+        global_turn_count += 1
+        # Draw step
+        if draw_or_take == 0:
+            return 24  # draw from draw pile
+        else:
+            return 25  # take from discard pile
+
+    elif expected_action == "place":
+
+        # Place step
+        if place_or_discover < 12:
+            # place hand card onto that position
+            return place_or_discover
+        else:
+            # Need to reveal a card: pick a random masked card action from 12..23
+            action_mask = obs_one["action_mask"]
+            reveal_actions = [a for a in range(12, 24) if action_mask[a] == 1]
+            if len(reveal_actions) == 0:
+                # fallback if none available (should not happen)
+                return 12
+            else:
+                return random.choice(reveal_actions)
+
+    # fallback
+    return 24
+
+
+##############################
+# POLICY FUNCTION
+##############################
+def sb3_policy_env2(obs_one: dict, game) -> int:
+    """
+    Policy function integrating the SB3 model from environment Two into environment One.
+
+    Steps:
+       1) Convert PettingZoo obs -> env2 obs (with turn count)
+       2) model.predict(obs_env2)
+       3) convert env2 action -> env1 action
+    """
+    global global_turn_count
+
+    obs_env2 = obs_one_to_obs_two(obs_one, global_turn_count)
+    action_two, _ = model_env2.predict(obs_env2, deterministic=True)
+
+    next_action = game.get_expected_action()[1]  # "draw" or "place"
+    action_one = act_two_to_act_one(action_two, next_action, obs_one)
+    return action_one
+
+
+###################################################################
+# 5) USE THIS POLICY IN YOUR SKYjoGUI CODE (Environment One)
+###################################################################
+#
+# Inside your `if __name__ == "__main__":` block (or wherever you configure GUI):
+#
+# from environment.skyjo_game import SkyjoGame
+# from your_module_above import sb3_policy_env2
+#
+# player_types = [
+#     sb3_policy_env2,  # AI using stable-baselines model from env Two
+#     'human',          # or another AI, or 'human'
+# ]
+#
+# gui = SkyjoGUI(num_players=2, player_types=player_types, observe_other_players_indirect=True)
+#
+###################################################################
+# 6) HOW THE GUI CALLS IT
+###################################################################
+#
+# In SkyjoGUI.ai_turn(), you do something like:
+#    obser, mask = self.game.collect_observation(self.current_player)
+#    obs_dict = {"observations": obser, "action_mask": mask}
+#    action_int = self.player_types[self.current_player](obs_dict, self.game)
+#    self.perform_action(action_int)
+#
+# That’s all. Now your SB3 agent from environment Two is playing inside environment One!
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -246,7 +347,7 @@ class SkyjoGUI:
 
         # Check if the game is over
         if self.game.has_terminated:
-            scores = self.game.game_metrics["final_score"]
+            scores = [int(x) for x in self.game.game_metrics["final_score"]]
             winner = scores.index(min(scores)) + 1
             messagebox.showinfo("Game Over", f"Game Over! Player {winner} wins!\nScores: {scores}")
             self.root.quit()
@@ -402,7 +503,7 @@ class SkyjoGUI:
             "action_mask": mask
         }
         ai_policy = self.player_types[self.current_player]
-        action_int = ai_policy(obs)
+        action_int = ai_policy(obs, self.game)
         self.perform_action(action_int)
         self.update_ui()
 
@@ -419,10 +520,9 @@ class SkyjoGUI:
 if __name__ == "__main__":
     # Define player types: 'human' or an AI function
     player_types = [
-        policy_two,
-        random_admissible_policy,
+        sb3_policy_env2,
         #policy_one,
         'human',
     ]
     # Replace 'human' with random_admissible_policy to make all AI players
-    gui = SkyjoGUI(num_players=3, player_types=player_types, observe_other_players_indirect=True)
+    gui = SkyjoGUI(num_players=2, player_types=player_types, observe_other_players_indirect=False)

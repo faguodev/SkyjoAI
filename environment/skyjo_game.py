@@ -77,7 +77,7 @@ class SkyjoGame(object):
         assert self.expected_action[1] == self._name_draw, "expect to draw after reset"
 
     @staticmethod
-    @njit()
+    @njit(fastmath=True)
     def _new_drawpile(card_dtype=np.int8):
         """create a drawpile len(150) and cards from -2 to 12"""
         number_of_cards = [10 for _ in np.arange(-2, 13)]
@@ -94,7 +94,7 @@ class SkyjoGame(object):
         self.reset()
 
     @staticmethod
-    @njit()
+    @njit(fastmath=True)
     def _set_seed_njit(value: int):
         """set seed for numba"""
         np.random.seed(value)
