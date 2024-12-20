@@ -1,21 +1,118 @@
 import tkinter as tk
 from tkinter import messagebox
 from functools import partial
-import numpy as np
-from typing import Callable, Optional
 import random
-from skyjo_game import SkyjoGame
+from environment.skyjo_game import SkyjoGame
 
-# Ensure the SkyjoGame class is in the same directory or adjust the import accordingly
-# from skyjo_game_logic import SkyjoGame
+from ray.tune.registry import register_env
+from ray.rllib.env.wrappers.pettingzoo_env import PettingZooEnv
+from ray.rllib.algorithms.ppo import PPOConfig
 
-# Placeholder AI policy for AI players
-def random_admissible_policy(observation, action_mask):
+from environment.skyjo_env import env as skyjo_env
+from ray.rllib.algorithms.callbacks import DefaultCallbacks
+import logging
+
+from models.action_mask_model import TorchActionMaskModel
+
+def random_admissible_policy(obs):
+    observation = obs["observations"]
+    action_mask = obs["action_mask"]
     admissible_actions = [i for i, mask in enumerate(action_mask) if mask == 1]
     return random.choice(admissible_actions)
 
+
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+
+class RewardDecayCallback(DefaultCallbacks):
+    def on_train_result(self, *, algorithm, result, **kwargs):
+        # Decay the reward scaling factor over training iterations
+        action_reward_decay = max(0.05, 1.0 - result["training_iteration"] * 0.005)
+        # env = algorithm.workers.local_worker().env
+        # env = algorithm.workers.local_env_runner.env
+        algorithm.config.env_config["action_reward_decay"] = action_reward_decay
+        logger.info(action_reward_decay)
+
+skyjo_config_old = {
+    "num_players": 3,
+    "score_penalty": 2.0,
+    "observe_other_player_indirect": True,
+    "mean_reward": 1.0,
+    "reward_refunded": 10,
+    "final_reward": 100,
+    "score_per_unknown": 5.0,
+    "action_reward_decay": 1.0,
+    "old_reward": True,
+    "render_mode": "human",
+}
+
+model_config = {
+    'custom_model': TorchActionMaskModel 
+}
+
+def env_creator(config):
+    return PettingZooEnv(skyjo_env(**config))
+
+register_env("skyjo", env_creator)
+
+test_env = env_creator(skyjo_config_old)
+obs_space = test_env.observation_space
+act_space = test_env.action_space
+
+def policy_mapping_fn(agent_id, _, **kwargs):
+    return "policy_" + str(agent_id) #int(agent_id.split("_")[-1])
+
+config_old = (
+    PPOConfig()
+    .training(model=model_config, )
+    .environment("skyjo", env_config=skyjo_config_old)
+    .framework('torch')
+    .callbacks(RewardDecayCallback)
+    .env_runners(num_env_runners=1)
+    # .rollouts(num_rollout_workers=6)
+    .resources(num_gpus=1)
+    .multi_agent(
+        policies={
+            "policy_0": (None, obs_space[0], act_space[0], {"entropy_coeff":0}),
+            "policy_1": (None, obs_space[1], act_space[1], {"entropy_coeff":0}),
+            "policy_2": (None, obs_space[2], act_space[2], {"entropy_coeff":0})
+        },
+        policy_mapping_fn=policy_mapping_fn,#(lambda agent_id, *args, **kwargs: agent_id),
+    )
+    .evaluation(evaluation_num_env_runners=0)
+    .debugging(log_level="INFO")
+)
+
+algo_old = config_old.build()
+model_save_dir_old = "v2_trained_models_old_rewards"
+final_dir_old = model_save_dir_old + f"/checkpoint_3000"
+algo_old.restore(final_dir_old)
+
+def policy_two(obs):
+    policy = algo_old.get_policy(policy_id=policy_mapping_fn(0, None))
+    action_exploration_policy, _, action_info = policy.compute_single_action(obs)
+    # 
+    action = action_exploration_policy
+    return action
+
+
+def policy_one(obs):
+    policy = algo_old.get_policy(policy_id=policy_mapping_fn(1, None))
+    action_exploration_policy, _, action_info = policy.compute_single_action(obs)
+    # 
+    action = action_exploration_policy
+    return action
+
+
+
+
+
+
+
 class SkyjoGUI:
-    def __init__(self, num_players=4, player_types=None):
+    def __init__(self, num_players=4, player_types=None, observe_other_players_indirect=False):
         """
         Initialize the Skyjo game GUI.
         :param num_players: Number of players (max 4)
@@ -26,7 +123,7 @@ class SkyjoGUI:
         assert len(player_types) == num_players, "Player types must match the number of players."
         self.num_players = num_players
         self.player_types = player_types
-        self.game = SkyjoGame(num_players=num_players)
+        self.game = SkyjoGame(num_players=num_players, observe_other_player_indirect=observe_other_players_indirect)
         self.root = tk.Tk()
         self.root.title("Skyjo Game")
         self.root.configure(bg='white')  # Set background to white
@@ -299,9 +396,13 @@ class SkyjoGUI:
             messagebox.showerror("Error", str(e))
 
     def ai_turn(self):
-        obs, action_mask = self.game.collect_observation(self.current_player)
+        obser, mask = self.game.collect_observation(self.current_player)
+        obs = {
+            "observations": obser,
+            "action_mask": mask
+        }
         ai_policy = self.player_types[self.current_player]
-        action_int = ai_policy(obs, action_mask)
+        action_int = ai_policy(obs)
         self.perform_action(action_int)
         self.update_ui()
 
@@ -318,10 +419,9 @@ class SkyjoGUI:
 if __name__ == "__main__":
     # Define player types: 'human' or an AI function
     player_types = [
+        policy_two,
+        #policy_one,
         'human',
-        random_admissible_policy,
-        random_admissible_policy,
-        random_admissible_policy
     ]
     # Replace 'human' with random_admissible_policy to make all AI players
-    gui = SkyjoGUI(num_players=4, player_types=player_types)
+    gui = SkyjoGUI(num_players=2, player_types=player_types, observe_other_players_indirect=True)
