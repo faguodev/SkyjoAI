@@ -59,15 +59,15 @@ config = (
     .training(model=model_config, )
     .environment("skyjo", env_config=skyjo_config)
     .framework('torch')
-    .callbacks(RewardDecayCallback)
+    #.callbacks(RewardDecayCallback)
     .env_runners(num_env_runners=1)
     # .rollouts(num_rollout_workers=6)
     .resources(num_gpus=1)
     .multi_agent(
         policies={
-            "policy_0": (None, obs_space[0], act_space[0], {"entropy_coeff":0.01}),
-            "policy_1": (None, obs_space[1], act_space[1], {"entropy_coeff":0.01}),
-            "policy_2": (None, obs_space[2], act_space[2], {"entropy_coeff":0.01})
+            "policy_0": (None, obs_space[0], act_space[0], {"entropy_coeff":0.03}),
+            "policy_1": (None, obs_space[1], act_space[1], {"entropy_coeff":0.03}),
+            "policy_2": (None, obs_space[2], act_space[2], {"entropy_coeff":0.03})
         },
         policy_mapping_fn=policy_mapping_fn,#(lambda agent_id, *args, **kwargs: agent_id),
     )
@@ -87,7 +87,9 @@ def convert_to_serializable(obj):
         return obj.tolist()
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
-model_save_dir = "v2_trained_models_new_rewards"
+# trained_models_<beta>_<beta>_<beta>_<callback>
+config = "_0.03_0.03_0.03_false"
+model_save_dir = "v2_trained_models_new_rewards" + config
 os.makedirs(model_save_dir, exist_ok=True)
 max_steps = 1e10
 max_iters = 100000
