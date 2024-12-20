@@ -113,7 +113,7 @@ class SimpleSkyjoEnv(AECEnv):
         self.mean_reward = mean_reward
         self.reward_refunded = reward_refunded
         self.final_reward = final_reward
-        self.action_reward_reduction = action_reward_decay
+        self.action_reward_decay = action_reward_decay
         self.final_reward_offest = final_reward_offest
         self.score_per_unknown = score_per_unknown
         self.old_reward = old_reward
@@ -265,7 +265,7 @@ class SimpleSkyjoEnv(AECEnv):
             if last_action:
                 self.rewards[current_agent] = self.final_reward_offest - card_sum[current_agent]
             else:
-                self.rewards[current_agent] = self.action_reward_reduction * (score_before - score_after)
+                self.rewards[current_agent] = self.action_reward_decay * (score_before - score_after)
 
         # action done, rewards if game over
         if game_over:
