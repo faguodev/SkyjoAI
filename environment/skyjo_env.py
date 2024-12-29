@@ -1,10 +1,10 @@
 from typing import List, Dict
-
 import numpy as np
 from gymnasium import spaces
 from pettingzoo import AECEnv
 from pettingzoo.utils import wrappers
 
+# IMPORTANT: import the updated SkyjoGame from your local file
 from environment.skyjo_game import SkyjoGame
 
 DEFAULT_CONFIG = {
@@ -18,17 +18,16 @@ DEFAULT_CONFIG = {
 
 
 def env(**kwargs):
-    """wrap SkyJoEnv in"""
-    env = SimpleSkyjoEnv(**kwargs)
-    env = wrappers.CaptureStdoutWrapper(env)
-    env = wrappers.TerminateIllegalWrapper(env, illegal_reward=-1)
-    env = wrappers.AssertOutOfBoundsWrapper(env)
-    env = wrappers.OrderEnforcingWrapper(env)
-    return env
+    """wrap SkyJoEnv in PettingZoo wrappers"""
+    _env = SimpleSkyjoEnv(**kwargs)
+    _env = wrappers.CaptureStdoutWrapper(_env)
+    _env = wrappers.TerminateIllegalWrapper(_env, illegal_reward=-1)
+    _env = wrappers.AssertOutOfBoundsWrapper(_env)
+    _env = wrappers.OrderEnforcingWrapper(_env)
+    return _env
 
 
 class SimpleSkyjoEnv(AECEnv):
-
     metadata = {
         "render_modes": ["human", None],
         "name": "skyjo",
@@ -48,67 +47,13 @@ class SimpleSkyjoEnv(AECEnv):
         action_reward_decay: float = 1.0,
         final_reward_offest: float = 0.0,
         old_reward: bool = False,
-        render_mode = None
+        render_mode=None
     ):
         """
-        Pettingzoo Gym for the card game SkyJo
-
-        params:
-            # game configuration
-            num_players: int, number of players
-            score_penalty: float, game default is 2.0
-                score penalty for players ending but not winning the game
-
-            # observation space configuration
-            observe_other_player_indirect: bool
-                True: observation space is:
-                    game statistics (pile +  player cards):
-                    + own 12 player cards
-                False: observation space is:
-                    game statistics (excluding player cards)
-                    + player cards of every player
-
-            # rewards
-            mean_reward: float, default: 1.0
-                mean reward at the end of an game
-                recommended to be > 0, e.g. Environments (like RLLib)
-                are positive sum games
-            reward_refunded: float, default: 0.0
-                adds an additional reward to learn the concept
-                of refunding cards in skyjo
-
-        observation space is DictSpace:
-            observations:
-                (1,) lowest sum of players, calculated feature
-                (1,) lowest number of unmasked cards of any player,
-                    calculated feature
-                (15,) counts of cards past discard pile cards & open player cards,
-                    calculated feature
-                (1,) top discard pile card
-                (1,) current hand_card
-                total: (19,)
-
-                if observe_other_player_indirect is True:
-                    # constant for any num_players
-                    (12) own cards
-                    total: (31,)
-                elif observe_other_player_indirect is False:
-                    (num_players*4*3,)
-                    total: (19+12*num_players,)
-
-            action_mask:
-                (26,)
-
-        action_space is Discrete(26):
-            0-11: place hand card to position 0-11
-            12-23: discard place hand card and reveal position 0-11
-            24: pick hand card from drawpile
-            25: pick hand card from discard pile
-
+        PettingZoo AEC Env for SkyJo
         """
         super().__init__()
 
-        # Hyperparams
         self.num_players = num_players
         self.mean_reward = mean_reward
         self.reward_refunded = reward_refunded
@@ -119,24 +64,23 @@ class SimpleSkyjoEnv(AECEnv):
         self.old_reward = old_reward
 
         self.table = SkyjoGame(
-            num_players,
+            num_players=num_players,
             score_penalty=score_penalty,
             observe_other_player_indirect=observe_other_player_indirect,
         )
 
-        # start PettingZoo API stuff
         self.render_mode = render_mode
         self.agents = [i for i in range(num_players)]
         self.possible_agents = self.agents[:]
         self.rewards = {agent: 0 for agent in self.agents}
-
         self.agent_selection = self._expected_agentname_and_action()[0]
 
-        self.terminations = self._convert_to_dict([False for _ in range(self.num_agents)])
-        # Not needed, since SkyJo will always end, but required by AECEnv
-        self.truncations = self._convert_to_dict([False for _ in range(self.num_agents)])
+        # termination/truncation
+        self.terminations = self._convert_to_dict([False] * self.num_agents)
+        self.truncations = self._convert_to_dict([False] * self.num_agents)
         self.infos = {i: {} for i in self.agents}
 
+        # define observation & action space
         self._observation_spaces = self._convert_to_dict(
             [
                 spaces.Dict(
@@ -179,17 +123,17 @@ class SimpleSkyjoEnv(AECEnv):
                 calculated feature
             (15,) counts of cards past discard pile cards & open player cards,
                 calculated feature
-            (1,) top discard pile card
-            (1,) current hand_card
-            total: (19,)
+            (17) top discard pile card
+            (17,) current hand_card
+            total: (51,)
 
             if observe_other_player_indirect is True:
                 # constant for any num_players
-                (12) own cards
-                total: (31,)
+                (12*17) own cards
+                total: (51+12*17,)
             elif observe_other_player_indirect is False:
-                (num_players*4*3,)
-                total: (19+12*num_players,)
+                (num_players*4*3*17,)
+                total: (51+12*num_players*17,)
 
         Args:
             agent ([type]): agent string
@@ -247,30 +191,31 @@ class SimpleSkyjoEnv(AECEnv):
             None: 
         """  
         current_agent = self.agent_selection
-        #Calculate Score before action
-        _, card_sum = self.table.collect_hidden_card_sums() #both should be arrays of length: num players
-        # assert(len(n_hidden_cards) == len(card_sum) and len(n_hidden_cards) == self.num_players)
-        score_before = card_sum[current_agent] #+ self.score_per_unknown * n_hidden_cards[current_agent]
 
         # if was done before
         if self.terminations[current_agent]:
             return self._was_dead_step(None)
 
+        # reward shaping: score before
+        _, card_sum = self.table.collect_hidden_card_sums()
+        score_before = card_sum[current_agent]
+
         game_over, last_action = self.table.act(current_agent, action_int=action)
 
-        #Calc score after action: first gather obs
+        # score after
         n_hidden_cards, card_sum = self.table.collect_hidden_card_sums()
+        score_after = card_sum[current_agent]
+
         if not self.old_reward:
-            score_after = card_sum[current_agent] #+ self.score_per_unknown * n_hidden_cards[current_agent]
             if last_action:
+                # player revealed all => we give final reward offset
                 self.rewards[current_agent] = self.final_reward_offest - card_sum[current_agent]
             else:
+                # simple delta-based reward
                 self.rewards[current_agent] = self.action_reward_decay * (score_before - score_after)
 
-        # action done, rewards if game over
+        # if the game is over, finalize
         if game_over:
-            # I don't think this is needed? - henry
-            # current player has terminated the game for all. gather rewards
             if self.old_reward:
                 self.rewards = self._convert_to_dict(
                     self._calc_final_rewards(**(self.table.get_game_metrics()))
@@ -280,11 +225,9 @@ class SimpleSkyjoEnv(AECEnv):
         if last_action:
             self.truncations[current_agent] = True
 
-        # This should only be called once after one round, right? - henry
-        # done
         self._accumulate_rewards()
 
-        # prepare for next agent
+        # next agent
         if not game_over:
             self.agent_selection = self._expected_agentname_and_action()[0]
 
@@ -296,12 +239,10 @@ class SimpleSkyjoEnv(AECEnv):
         self.table.reset()
         self.agents = self.possible_agents[:]
         self.agent_selection = self._expected_agentname_and_action()[0]
-        self.rewards = self._convert_to_dict([0 for _ in range(self.num_agents)])
-        self._cumulative_rewards = self._convert_to_dict(
-            [0 for _ in range(self.num_agents)]
-        )
-        self.terminations = self._convert_to_dict([False for _ in range(self.num_agents)])
-        self.truncations = self._convert_to_dict([False for _ in range(self.num_agents)])
+        self.rewards = self._convert_to_dict([0] * self.num_agents)
+        self._cumulative_rewards = self._convert_to_dict([0] * self.num_agents)
+        self.terminations = self._convert_to_dict([False] * self.num_agents)
+        self.truncations = self._convert_to_dict([False] * self.num_agents)
         self.infos = {i: {} for i in self.agents}
 
         if seed is not None:
@@ -319,50 +260,25 @@ class SimpleSkyjoEnv(AECEnv):
         """part of the PettingZoo API"""
         pass
 
-    # start utils
+    # --------------------------- UTILITIES --------------------------- #
 
     def _calc_final_rewards(
             self, final_score: List[int], **kwargs
     ):
         """
-        get reward from score.
-        reward is 100 for winner and -100 for all loosers
-
-        args:
-            game_results: dict['str': np.array of len(players) e.g. np.array([35,65,50])
-
-        returns:
-            reward: np.array [len(players)] e.g. np.array([ 16,-14,+1])
+        reward is +100 for winner, -100 for others
         """
-
         final_scores = np.asarray(final_score)
-        winner = np.where(final_scores == np.min(final_scores))
-
-        rewards = np.asarray([self.final_reward if i == winner[0][0] else -self.final_reward for i in
-                              range(len(final_scores))])  # should create an array of rewards
-        # either set to 100 if i==winner else to -100
+        winner_ids = np.where(final_scores == np.min(final_scores))[0]
+        # for simplicity, pick the first if tie
+        main_winner = winner_ids[0]
+        rewards = []
+        for i in range(len(final_scores)):
+            if i == main_winner:
+                rewards.append(self.final_reward)
+            else:
+                rewards.append(-self.final_reward)
         return rewards
-
-    def _calc_final_rewards_old(
-        self, final_score: List[int], num_refunded: List[int], **kwargs
-    ):
-        """
-        get reward from score.
-        reward is relative performance to average score
-        default mean reward is self.mean_reward == 1
-
-        args:
-            game_results: dict['str': np.array of len(players) e.g. np.array([35,65,50])
-
-        returns:
-            reward: np.array [len(players)] e.g. np.array([ 16,-14,+1])
-        """
-        score = np.array(final_score)
-        reward = -score + np.mean(score) + self.mean_reward
-
-        if self.reward_refunded:
-            reward += np.array(num_refunded) * self.reward_refunded
-        return reward
 
     @staticmethod
     def _name_to_player_id(name: str) -> int:
@@ -380,21 +296,16 @@ class SimpleSkyjoEnv(AECEnv):
         return dict(zip(self.possible_agents, list_of_list))
 
     def _expected_agentname_and_action(self):
-        """implemented, get next player name for action from skyjo"""
-        a = self.table.get_expected_action()
+        """Retrieve which player_id + action name is expected next by the game."""
+        a = self.table.get_expected_action()  # e.g. [player_id, 'draw' or 'place']
         return a[0], a[1]
 
     def read_reward_params(self, file_name):
-
-        file = open(file_name, "r")
-        lines = file.readlines()
-
+        with open(file_name, "r") as file:
+            lines = file.readlines()
         final_reward_value = float(lines[0].split(":")[1].strip())
         score_per_unknown_card = float(lines[1].split(":")[1].strip())
-
         return final_reward_value, score_per_unknown_card
-
-    # end utils
 
 
 if __name__ == "__main__":

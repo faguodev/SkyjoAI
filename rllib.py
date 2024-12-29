@@ -34,12 +34,15 @@ skyjo_config = {
     "final_reward": 100,
     "score_per_unknown": 5.0,
     "action_reward_decay": 1.0,
-    "old_reward": False,
+    "old_reward": True,
     "render_mode": "human",
 }
 
 model_config = {
-    'custom_model': TorchActionMaskModel 
+    "custom_model": TorchActionMaskModel,
+    # Add the following keys:
+    "fcnet_hiddens": [1024, 1024, 1024, 512, 512],
+    "fcnet_activation": "relu",
 }
 
 def env_creator(config):
@@ -89,7 +92,7 @@ def convert_to_serializable(obj):
 
 # trained_models_<beta>_<beta>_<beta>_<callback>
 config = "_0.03_0.03_0.03_false"
-model_save_dir = "v2_trained_models_new_rewards" + config
+model_save_dir = "v3_trained_models_old_rewards" + config
 os.makedirs(model_save_dir, exist_ok=True)
 max_steps = 1e10
 max_iters = 100000

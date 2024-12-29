@@ -29,20 +29,37 @@ class SkyjoGame(object):
         self.num_players = num_players
         self.score_penalty = score_penalty
 
-        # hardcoded params
+        # placeholders for unknown/refunded in the internal game logic:
         self.fill_masked_unknown_value = 15
         self.fill_masked_refunded_value = -14
         self.card_dtype = np.int8
+
+        # action names for clarity
         self._name_draw = "draw"
         self._name_place = "place"
 
+        # one-hot parameters
+        #   => for each card "slot", we produce 17 entries:
+        #      [-2..12] => 15 values, plus 1 unknown, plus 1 refunded
+        self.one_hot_size = 17
+
         # observation of other players:
-        # indirect: via statistics (observation space invariant of num_players)
-        # direct: add other observations to player stats
         self.observe_other_player_indirect = observe_other_player_indirect
-        self.obs_shape = (
-            (19 + 12,) if observe_other_player_indirect else (19 + num_players * 12,)
-        )
+
+        # >>> ADJUSTED OBSERVATION SHAPE <<<
+        # The first 17 entries are still integer-based "global stats" (1 + 1 + 15).
+        # Then we add 2 single-card fields (top_discard + hand_card), each 17 dims => +34
+        # Finally, for the player's cards:
+        #   - If indirect => only own 12 => 12*17 = 204
+        #   - If direct   => all players => num_players*12*17
+        #   => total = 17 + 34 + (12 or num_players*12)*17
+        if observe_other_player_indirect:
+            self.obs_shape = (17 + 2*self.one_hot_size + 12*self.one_hot_size,)
+        else:
+            self.obs_shape = (
+                17 + 2*self.one_hot_size + (self.num_players*12*self.one_hot_size,),
+            )
+
         self.action_mask_shape = (26,)
         self.previous_action = None
 
@@ -114,7 +131,7 @@ class SkyjoGame(object):
             self.players_masked,
             np.array(self.discard_pile, dtype=self.players_cards.dtype),
         )[1]
-        # player with most cards starts to draw
+        # player with the largest sum of known cards starts
         starter_id = player_counts.argmax() * 2
 
         self.actions = itertools.cycle(
@@ -125,19 +142,14 @@ class SkyjoGame(object):
             )
         )
 
-        # forward to point of expected action
-        # where player with most cards starts to draw
+        # forward to the correct starting action
         for _ in range(1 + starter_id):
             self._internal_next_action()
 
     @staticmethod
     @njit(fastmath=True)
     def _reshuffle_discard_pile(old_pile) -> Tuple[List[int], List[int]]:
-        """reshuffle discard pile into drawpile.
-
-        old_pile -> shuffle as new drawpile
-        new discard_pile draw 1 card from drawpile
-        """
+        """reshuffle discard pile into drawpile, pop top for discard pile"""
         np.random.shuffle(old_pile)
         drawpile = list(old_pile)
         discard_pile = list([drawpile.pop()])
@@ -149,10 +161,42 @@ class SkyjoGame(object):
         """set next expected action"""
         self.expected_action = next(self.actions)
 
+    # ------------------------------------------------------------------#
+    #                           ONE-HOT UTILS                           #
+    # ------------------------------------------------------------------#
+
+    def _one_hot_card_value(self, card_value: int) -> np.ndarray:
+        """
+        Convert a single card_value (int) into a length-17 one-hot vector:
+          indices 0..14 correspond to -2..12
+          index 15 -> unknown (was 15 in the logic)
+          index 16 -> refunded (was -14 in the logic)
+        """
+        arr = np.zeros(self.one_hot_size, dtype=np.int8)
+        if -2 <= card_value <= 12:
+            # shift by +2 to move [-2..12] -> [0..14]
+            arr[card_value + 2] = 1
+        elif card_value == self.fill_masked_unknown_value:
+            arr[15] = 1
+        elif card_value == self.fill_masked_refunded_value:
+            arr[16] = 1
+        else:
+            # If you have any edge case, you might want to handle it or raise an error
+            pass
+        return arr
+
+    def _one_hot_encode_array(self, card_array: List[int]) -> np.ndarray:
+        """
+        Convert a list/array of integer card values into flattened one-hot vectors.
+        E.g. if card_array has length N -> output shape is (N * 17,)
+        """
+        out = []
+        for val in card_array:
+            out.append(self._one_hot_card_value(val))
+        return np.concatenate(out, axis=0)
+
     # [start: collect observation]
-
     def collect_observation(self, player_id: int) -> Tuple[np.array, np.array]:
-
         # get global stats
         (
             stats_counts,
@@ -166,9 +210,9 @@ class SkyjoGame(object):
             count_players_cards=not self.observe_other_player_indirect,
         )
 
-        # get player observation
+        # gather the known cards (still in integer form):
         if self.observe_other_player_indirect:
-            # observe only self
+            # observe only own 12 cards
             player_obs = self._jit_known_player_cards(
                 self.players_cards,
                 self.players_masked,
@@ -176,27 +220,38 @@ class SkyjoGame(object):
                 player_id=player_id,
             )
         else:
+            # observe all players' cards
             player_obs = self._jit_known_player_cards_all(
                 self.players_cards,
                 self.players_masked,
                 fill_unknown=self.fill_masked_unknown_value,
                 player_id=player_id,
             )
-        # concat observation
-        obs = np.array(
-            (
-                [min(cards_sum.min(), 127)]  # (1,)
-                + [n_hidden.min()]  # (1,)
-                + stats_counts  # (15,)
-                + [top_discard]  # (1,)
-                + [self.hand_card]  # (1,)
-                + player_obs  # (12,) or (num_players * 12,)
-            ),
-            dtype=self.card_dtype,
-        )
 
+        # ---- Build the numerical features for first part (17) ----
+        #   [0] = min(cards_sum.min(), 127)
+        #   [1] = n_hidden.min()
+        #   [2..16] = stats_counts (length 15)
+        #   => total = 17
+        global_stats = np.array(
+            ([min(cards_sum.min(), 127), n_hidden.min()] + stats_counts),
+            dtype=self.card_dtype,
+        )  # shape (17,)
+
+        # one-hot encode top_discard & hand_card => shape (17,) each
+        top_discard_oh = self._one_hot_card_value(top_discard)
+        hand_card_oh = self._one_hot_card_value(self.hand_card)
+
+        # one-hot encode player_obs => shape (Ncards * 17,)
+        #   Ncards = 12 if indirect else num_players*12 if direct
+        player_obs_oh = self._one_hot_encode_array(player_obs)
+
+        # final observation -> concat everything
+        obs = np.concatenate([global_stats, top_discard_oh, hand_card_oh, player_obs_oh])
+
+        # verify shape
         assert obs.shape == self.obs_shape, (
-            "unexpected observation shape" f"{obs.shape} expected {self.obs_shape}"
+            f"Unexpected observation shape {obs.shape}, expected {self.obs_shape}"
         )
 
         action_mask = self._jit_action_mask(
@@ -221,7 +276,6 @@ class SkyjoGame(object):
             np.array(self.discard_pile, dtype=self.players_cards.dtype),
             count_players_cards=not self.observe_other_player_indirect,
         )
-
         return n_hidden, cards_sum
 
     @staticmethod
@@ -234,12 +288,12 @@ class SkyjoGame(object):
         action_mask_shape=(26,),
     ):
         if next_action == "place":
-            # must be either a card that is front of player (0 is masking value for refunded cards)
+            # must be either a card that is front of the player (0 is for refunded)
             mask_place = (players_masked[player_id] != 0).astype(np.int8)
             # discard hand card and reveal an masked card
-            if previous_action == 24: # 24 is draw from drawpile
+            if previous_action == 24:  # 24 is draw from drawpile
                 mask_place2 = (players_masked[player_id] == 2).astype(np.int8)
-            else: # 25 is draw from discard pile
+            else:  # 25 is draw from discard pile
                 mask_place2 = np.zeros(players_masked[player_id].shape, dtype=np.int8)
             mask_draw = np.zeros(2, dtype=np.int8)
         else:  # draw
@@ -262,7 +316,7 @@ class SkyjoGame(object):
         count_players_cards: bool = True,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, int]:
         """observe game statistics, features to percieve global game"""
-        # bincount
+        # pile plus placeholders for all possible card values
         counted = np.array(list(pile) + list(range(-2, 13)), dtype=players_cards.dtype)
         known_cards_sum = [0] * players_cards.shape[0]
         count_hidden = [0] * players_cards.shape[0]
@@ -281,7 +335,7 @@ class SkyjoGame(object):
         for pl in range(masked_option_hidden.shape[0]):
             count_hidden[pl] = np.sum(masked_option_hidden[pl])
 
-        pile_top = pile[-1] if len(pile) else -3
+        pile_top = pile[-1] if len(pile) else -3  # fallback if needed
         known_cards_sum = np.array(known_cards_sum)
         count_hidden = np.array(count_hidden)
         return list(counts.flatten()), known_cards_sum, count_hidden, pile_top
@@ -295,13 +349,10 @@ class SkyjoGame(object):
         fill_unknown=np.nan,
     ) -> np.array:
         """
-        get array of player cards, with refunded and unknown masked with value
-
-        return:
-            array of size (4,3) or (12,) if flatten
+        get array of player's own 12 cards; mask unknown with fill_unknown
+        mask refunded with fill_unknown as well (the environment can interpret them differently)
         """
         cards = np.full_like(players_cards[player_id], fill_unknown)
-
         masked_revealed = players_masked[player_id] != 2
         cards[masked_revealed] = players_cards[player_id][masked_revealed]
         return list(cards.flatten())
@@ -315,26 +366,19 @@ class SkyjoGame(object):
         fill_unknown=np.nan,
     ) -> np.array:
         """
-        get array of player cards, with refunded and unknown masked with value
-
-        return:
-            array of size players_cards (num_players, 4, 3)
-                        or players_cards.flatten() if flatten
+        get array of cards for all players, with unknown/refunded masked with fill_unknown,
+        in the order: current_player first, then the rest
         """
         cards = np.full_like(players_cards, fill_unknown)
-
-        # assign in the desired order
-        for player_id_iter in np.roll(np.arange(players_cards.shape[0]), player_id):
-            masked_revealed = players_masked[player_id_iter] != 2
-            cards[player_id_iter][masked_revealed] = players_cards[player_id_iter][
-                masked_revealed
-            ]
+        all_ids = np.roll(np.arange(players_cards.shape[0]), player_id)
+        for pl in all_ids:
+            masked_revealed = players_masked[pl] != 2
+            cards[pl][masked_revealed] = players_cards[pl][masked_revealed]
         return list(cards.flatten())
 
     # [end: collect observation]
 
     # [start: perform actions]
-
     def act(self, player_id: int, action_int: int):
         """perform actions
 
@@ -342,38 +386,32 @@ class SkyjoGame(object):
             game_over: If this was the last action and the game is now over
             last_action: If this was the last action for the player
         """
-
-        # Check if player_id and action_int are as expected
-        #print(f"{player_id = }, {action_int = }")
         assert self.expected_action[0] == player_id, (
             f"ILLEGAL ACTION: expected {self.expected_action[0]}"
             f" but requested was {player_id}"
         )
-        assert action_int != None, (
-            "ILLEGAL ACTION: None not supported"
-        )
+        assert action_int is not None, "ILLEGAL ACTION: None not supported"
         assert 0 <= action_int <= 25, f"action int {action_int} not in range(0,26)"
 
         if self.has_terminated:
             warnings.warn(
-                "Attemp playing terminated game."
-                " game has been already terminated by pervios player."
+                "Attempt playing a terminated game."
+                " The game has already ended."
             )
-            return True
+            return True, True
 
         game_over = False
         last_action = False
         if 24 <= action_int <= 25:
+            # draw
             assert self.hand_card == self.fill_masked_unknown_value, (
-                "ILLEGAL ACTION. requested draw action"
-                f" {self.render_action_explainer(action_int)}"
-                f"already have a hand card {self.hand_card} "
+                "ILLEGAL ACTION. requested draw action but hand_card not empty."
             )
             self._action_draw_card(player_id, action_int)
         else:
+            # place
             assert self.hand_card != self.fill_masked_unknown_value, (
-                f"ILLEGAL ACTION. requested place action "
-                f"but not having a hand card {self.hand_card} "
+                "ILLEGAL ACTION. requested place action but no card in hand."
             )
             self._action_place(player_id, action_int)
 
@@ -381,13 +419,11 @@ class SkyjoGame(object):
             last_action = self._player_goal_check(self.players_masked, player_id)
             if last_action and self.last_round_initiator is None:
                 self.last_round_initiator = player_id
-                
+
             if self.last_round_initiator is not None:
                 last_action = True
 
         self.previous_action = action_int
-
-        # Switch to the next expected action
         self._internal_next_action()
 
         # Check if the next action belongs to the player that initiated the last round
@@ -421,8 +457,7 @@ class SkyjoGame(object):
                 )
             self.hand_card = self.drawpile.pop()
         else:
-            # draw from discard pile
-            # discard pile cannot go empty by definition
+            # draw from discard
             self.hand_card = self.discard_pile.pop()
 
         # action done
@@ -448,19 +483,19 @@ class SkyjoGame(object):
             self.players_masked[player_id][action_place_to_pos] = 1
             self.players_cards[player_id][action_place_to_pos] = self.hand_card
         else:
+            # 12..23 -> discard the hand card, reveal an unrevealed card
             assert self.previous_action == 24, (
-                f"ILLEGAL ACTION. Can't place the card back on the discard pile."
+                f"ILLEGAL ACTION. Can't place the card back on the discard pile "
+                f"unless it was drawn from the drawpile."
             )
-            # discard hand card, reveal a yet unrevealed card
             place_pos = action_place_to_pos - 12
             assert self.players_masked[player_id][place_pos] == 2, (
-                f"illegal action {self.render_action_explainer(action_place_to_pos)}."
-                f"card is already revealed: {self.players_masked[player_id]}"
+                f"illegal action: card is already revealed."
             )
             self.discard_pile.append(self.hand_card)
             self.players_masked[player_id][place_pos] = 1
 
-        # check if three in a row -> discard and mask cards then.
+        # check if three in a row => refunded
         (
             is_updated,
             pc_update,
@@ -477,11 +512,8 @@ class SkyjoGame(object):
             self.players_cards, self.players_masked = pc_update, pm_update
             self.discard_pile.extend(dp_add)
 
-        # action done
         self.game_metrics["num_placed"][player_id] += 1
         self.hand_card = self.fill_masked_unknown_value
-
-    # [end: perform actions]
 
     @staticmethod
     @njit(fastmath=True)
@@ -492,22 +524,22 @@ class SkyjoGame(object):
         fill_masked_refunded_value: int = -14,
     ):
         """
-        check if any cards of the player got refunded.
-        if so return new players_cards, players_masked and additions to discard pile
+        check if any stack of 3 cards is the same => refunded
+        replace them with fill_masked_refunded_value and players_masked=0
         """
         cards_to_discard_pile = np.empty((0,), dtype=np.int8)
         values_updated = False
 
-        # for stack in [0, 1, 2, 3]
+        # each stack is 3 cards (4 columns => indices 0..11 in sets of 3)
         for stack in range(players_cards[player_id].shape[0] // 3):
             slice_tup = slice(stack * 3, stack * 3 + 3, 1)
             cards_stack_3_tup = players_cards[player_id][slice_tup]
-            # check if all got the same value
+            # check if all are the same
             if np.min(cards_stack_3_tup) == np.max(cards_stack_3_tup):
-                # check if the same value has been masked before
+                # also check if they are actually revealed
                 if np.all(players_masked[player_id][slice_tup] == 1):
                     players_masked[player_id][slice_tup] = 0
-
+                    # note: we can store the masked values into discard pile if needed
                     cards_to_discard_pile = np.append(
                         cards_to_discard_pile, players_masked[player_id][slice_tup]
                     )
@@ -537,17 +569,17 @@ class SkyjoGame(object):
         """
         calculate game scores
         """
-
         score = [0.0] * players_cards.shape[0]
 
         for pl in range(players_cards.shape[0]):
             for stack in range(players_cards[pl].shape[0] // 3):
                 slice_tup = slice(stack * 3, stack * 3 + 3, 1)
                 cards_stack_3_tup = players_cards[pl][slice_tup]
+                # only sum up if not refunded
                 if np.min(cards_stack_3_tup) != np.max(cards_stack_3_tup):
                     score[pl] += np.sum(cards_stack_3_tup)
 
-        # penalty if finisher is not winner.
+        # penalty if finisher is not the actual winner
         if min(score) != score[player_won_id]:
             score[player_won_id] *= score_penalty
         return score
@@ -563,8 +595,8 @@ class SkyjoGame(object):
     def render_table(self):
         """
         render game:
-            render cards for all players
-            render game statistics
+            - render cards for all players
+            - render game statistics
         """
         render_cards_open = False
         str_board = f"{'='*7} render board: {'='*5} \n"
@@ -621,7 +653,7 @@ class SkyjoGame(object):
     @classmethod
     def render_action_explainer(cls, action_int: int):
         """adds a string explaining actions to plot of render_player"""
-        assert action_int in range(0, 26), "action not valid action int {action_int}"
+        assert action_int in range(0, 26), f"action not valid: {action_int}"
 
         if action_int == 24:
             return "draw from drawpile"
@@ -631,16 +663,13 @@ class SkyjoGame(object):
         if action_int in range(0, 12):
             place_id = action_int
             result = f"place card ({action_int}) - "
-        elif action_int in range(12, 24):
+        else:  # 12..23
             place_id = action_int - 12
             result = f"handcard discard & reveal card ({action_int}) - "
 
         col = math.floor(place_id / 3)
-
         row = place_id % 4
-
         result += f"col:{col} row:{row}"
-
         return result
 
     @classmethod
@@ -652,9 +681,18 @@ class SkyjoGame(object):
             array, separator="\t ", formatter={"str_kind": lambda x: str(x)}
         )
         return (
-            f"action ids 0-25: \n(put handcard here / reveal this card) \n {array} \n"
-            f"24: draw from drawpile \n 25: draw from discard pile"
+            f"action ids 0-25:\n"
+            f" (put handcard here / reveal this card)\n {array}\n"
+            f"24: draw from drawpile\n"
+            f"25: draw from discard pile"
         )
-
     # [end: render utils]
 
+
+if __name__ == "__main__":
+    # simple test
+    game = SkyjoGame()
+    obs, mask = game.collect_observation(player_id=0)
+    print("Obs shape:", obs.shape)
+    print("Obs:", obs)
+    print("Action mask:", mask)
