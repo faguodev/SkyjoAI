@@ -222,6 +222,13 @@ class SimpleSkyjoEnv(AECEnv):
                 )
             self.terminations = {i: True for i in self.agents}
 
+
+            # --- NEW PART: store final card sums in info dict for each agent ---
+            n_hidden, card_sums = self.table.collect_hidden_card_sums()
+            for idx, agent_id in enumerate(self.agents):
+                self.infos[agent_id]["final_card_sum"] = card_sums[idx]
+                self.infos[agent_id]["n_hidden_cards"] = n_hidden[idx]
+
         if last_action:
             self.truncations[current_agent] = True
 

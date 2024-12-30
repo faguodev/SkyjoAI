@@ -7,6 +7,7 @@ from ray.rllib.algorithms.callbacks import DefaultCallbacks
 import logging
 import numpy as np
 import os
+import json
 
 from models.action_mask_model import TorchActionMaskModel
 
@@ -25,10 +26,26 @@ class RewardDecayCallback(DefaultCallbacks):
         logger.info(action_reward_decay)
 
 
+class SkyjoLoggingCallbacks(DefaultCallbacks):
+    def on_episode_end(self, *, worker, base_env, policies, episode, **kwargs):
+        """
+        This is called at the end of each episode. We grab
+        the final card sum from the `info` dict for each agent
+        and log it as a custom metric.
+        """
+        for agent_id in episode.get_agents():
+            info = episode.last_info_for(agent_id)
+            if info is not None and "final_card_sum" in info:
+                metric_name = f"final_card_sum_{agent_id}"
+                episode.custom_metrics[metric_name] = info["final_card_sum"]
+            if info is not None and "n_hidden_cards" in info:
+                metric_name = f"n_hidden_cards_{agent_id}"
+                episode.custom_metrics[metric_name] = info["n_hidden_cards"]
+
 skyjo_config = {
     "num_players": 3,
     "score_penalty": 2.0,
-    "observe_other_player_indirect": True,
+    "observe_other_player_indirect": False,
     "mean_reward": 1.0,
     "reward_refunded": 10,
     "final_reward": 100,
@@ -62,6 +79,7 @@ config = (
     .training(model=model_config, )
     .environment("skyjo", env_config=skyjo_config)
     .framework('torch')
+    .callbacks(SkyjoLoggingCallbacks) 
     #.callbacks(RewardDecayCallback)
     .env_runners(num_env_runners=1)
     # .rollouts(num_rollout_workers=6)
@@ -88,16 +106,28 @@ def convert_to_serializable(obj):
         return int(obj)
     elif isinstance(obj, np.ndarray):
         return obj.tolist()
-    raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+    else:
+        return "error"
 
 # trained_models_<beta>_<beta>_<beta>_<callback>
-config = "_0.03_0.03_0.03_false"
+config = "_others_direct"
 model_save_dir = "v3_trained_models_old_rewards" + config
 os.makedirs(model_save_dir, exist_ok=True)
 max_steps = 1e10
 max_iters = 100000
+
+
+if not os.path.exists("logs3"):
+    os.mkdir("logs3")
+
 for iters in range(max_iters):
     result = algo.train()
+
+    # Can be adjusted as needed
+    if iters % 10 == 0:
+        with open(f"logs3/result_iteration_{iters}.json", "w") as f:
+            json.dump(result, f, indent=4, default=convert_to_serializable)
+
     if iters % 100 == 0:
         checkpoint_dir = model_save_dir + f"/checkpoint_{iters}"
         os.makedirs(checkpoint_dir, exist_ok=True)
