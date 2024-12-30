@@ -49,7 +49,10 @@ skyjo_config_old = {
 }
 
 model_config = {
-    'custom_model': TorchActionMaskModel 
+    "custom_model": TorchActionMaskModel,
+    # Add the following keys:
+    "fcnet_hiddens": [1024, 1024, 1024, 512, 512],
+    "fcnet_activation": "relu",
 }
 
 def env_creator(config):
@@ -86,8 +89,8 @@ config_old = (
 )
 
 algo_old = config_old.build()
-model_save_dir_old = "v2_trained_models_old_rewards"
-final_dir_old = model_save_dir_old + f"/checkpoint_3000"
+model_save_dir_old = "v3_trained_models_old_rewards_0.03_0.03_0.03_false"
+final_dir_old = model_save_dir_old + f"/checkpoint_100"
 algo_old.restore(final_dir_old)
 
 def policy_two(obs):

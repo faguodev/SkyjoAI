@@ -46,13 +46,17 @@ skyjo_config_new = {
     "final_reward": 100,
     "score_per_unknown": 5.0,
     "action_reward_decay": 1.0,
-    "old_reward": False,
+    "old_reward": True,
     "render_mode": "human",
 }
 
 model_config = {
-    'custom_model': TorchActionMaskModel 
+    "custom_model": TorchActionMaskModel,
+    # Add the following keys:
+    "fcnet_hiddens": [1024, 1024, 1024, 512, 512],
+    "fcnet_activation": "relu",
 }
+
 
 def env_creator(config):
     return PettingZooEnv(skyjo_env(**config))
@@ -78,9 +82,9 @@ config_old = (
     .resources(num_gpus=1)
     .multi_agent(
         policies={
-            "policy_0": (None, obs_space[0], act_space[0], {"entropy_coeff":0.01}),
-            "policy_1": (None, obs_space[1], act_space[1], {"entropy_coeff":0.01}),
-            "policy_2": (None, obs_space[2], act_space[2], {"entropy_coeff":0.01})
+            "policy_0": (None, obs_space[0], act_space[0], {"entropy_coeff":0.03}),
+            "policy_1": (None, obs_space[1], act_space[1], {"entropy_coeff":0.03}),
+            "policy_2": (None, obs_space[2], act_space[2], {"entropy_coeff":0.03})
         },
         policy_mapping_fn=policy_mapping_fn,#(lambda agent_id, *args, **kwargs: agent_id),
     )
@@ -99,9 +103,9 @@ config_new = (
     .resources(num_gpus=1)
     .multi_agent(
         policies={
-            "policy_0": (None, obs_space[0], act_space[0], {"entropy_coeff":0.01}),
-            "policy_1": (None, obs_space[1], act_space[1], {"entropy_coeff":0.01}),
-            "policy_2": (None, obs_space[2], act_space[2], {"entropy_coeff":0.01})
+            "policy_0": (None, obs_space[0], act_space[0], {"entropy_coeff":0.03}),
+            "policy_1": (None, obs_space[1], act_space[1], {"entropy_coeff":0.03}),
+            "policy_2": (None, obs_space[2], act_space[2], {"entropy_coeff":0.03})
         },
         policy_mapping_fn=policy_mapping_fn,#(lambda agent_id, *args, **kwargs: agent_id),
     )
@@ -110,20 +114,14 @@ config_new = (
 )
 
 algo_old = config_old.build()
-algo_old_2000 = config_old.build()
-algo_old_1000 = config_old.build()
 algo_new = config_new.build()
 
-model_save_dir_old = "v2_trained_models_old_rewards"
-model_save_dir_new = "v2_trained_models_new_rewards"
-final_dir_old = model_save_dir_old + f"/checkpoint_3000"
-old_dir_2000 = model_save_dir_old + f"/checkpoint_2000" 
-old_dir_1000 = model_save_dir_old + f"/checkpoint_1000" 
-final_dir_new = model_save_dir_new + f"/checkpoint_3000"
+model_save_dir_old = "v3_trained_models_old_rewards_0.03_0.03_0.03_false"
+model_save_dir_new = "v3_trained_models_old_rewards_0.03_0.03_0.03_false"
+final_dir_old = model_save_dir_old + f"/checkpoint_2100"
+final_dir_new = model_save_dir_new + f"/checkpoint_2200"
 
 algo_old.restore(final_dir_old)
-algo_old_2000.restore(old_dir_2000)
-algo_old_1000.restore(old_dir_1000)
 algo_new.restore(final_dir_new)
 
 env_pettingzoo = skyjo_env(**skyjo_config_old)
@@ -153,8 +151,6 @@ while i_episode <= 10000:
         #print(f"\n\n\n\n\n===================== Iteration {i} =====================")
         obs, reward, term, trunc, info = env_pettingzoo.last()
 
-        print(obs)
-        print(type(obs))
 
         #print(f"{term = }, {trunc = }")
 
@@ -165,17 +161,15 @@ while i_episode <= 10000:
         action_mask = obs["action_mask"]
         
         if agent == 0:
-            policy = algo_old_2000.get_policy(policy_id=policy_mapping_fn(agent, None))
-            action_exploration_policy, _, action_info = policy.compute_single_action(obs)
+            action = random_admissible_policy(observation, action_mask)
             # 
-            action = action_exploration_policy
         elif agent == 1:
             policy = algo_old.get_policy(policy_id=policy_mapping_fn(agent, None))
             action_exploration_policy, _, action_info = policy.compute_single_action(obs)
             # 
             action = action_exploration_policy
         elif agent == 2:
-            policy = algo_old_1000.get_policy(policy_id=policy_mapping_fn(agent, None))
+            policy = algo_new.get_policy(policy_id=policy_mapping_fn(1, None))
             action_exploration_policy, _, action_info = policy.compute_single_action(obs)
             # 
             action = action_exploration_policy
