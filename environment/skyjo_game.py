@@ -56,9 +56,7 @@ class SkyjoGame(object):
         if observe_other_player_indirect:
             self.obs_shape = (17 + 2*self.one_hot_size + 12*self.one_hot_size,)
         else:
-            self.obs_shape = (
-                17 + 2*self.one_hot_size + (self.num_players*12*self.one_hot_size,),
-            )
+            self.obs_shape = (17 + 2*self.one_hot_size + self.num_players*12*self.one_hot_size,)
 
         self.action_mask_shape = (26,)
         self.previous_action = None
