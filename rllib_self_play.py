@@ -3,7 +3,12 @@ from ray.tune.registry import register_env
 from ray.rllib.env.wrappers.pettingzoo_env import PettingZooEnv
 from ray.rllib.algorithms.ppo import PPOConfig
 #from ray.tune.stopper import MaximumIterationStopper
-from ray.rllib.utils.metrics import ENV_RUNNER_RESULTS
+from ray.air.constants import TRAINING_ITERATION
+from ray.rllib.utils.metrics import (
+    ENV_RUNNER_RESULTS,
+    NUM_ENV_STEPS_SAMPLED_LIFETIME,
+)
+
 
 from environment.skyjo_env import env as skyjo_env
 from ray.rllib.algorithms.callbacks import DefaultCallbacks
@@ -218,8 +223,8 @@ tuner = tune.Tuner(
         stop=stop,
         storage_path=storage_path,
         checkpoint_config=train.CheckpointConfig(
-                checkpoint_frequency=args.checkpoint_freq,
-                checkpoint_at_end=args.checkpoint_at_end,
+                checkpoint_frequency=1,
+                checkpoint_at_end=True,
             ),
     ),
     #tune_config=tune.TuneConfig(
