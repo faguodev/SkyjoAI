@@ -66,21 +66,21 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
                 metric_name = f"n_hidden_cards_{agent_id}"
                 episode.custom_metrics[metric_name] = info["n_hidden_cards"]
 
-        main_agent = 0
-        rewards = episode.get_rewards()
-
-        if main_agent in rewards:
-            #True if main won False if not id of main
-            main_won = np.argmin(base_env.table.get_game_metrics()["final_score"]) == main_agent #rewards[main_agent][-1] == 1.0
-            metrics_logger.log_value(
-                "win_rate",
-                main_won,
-                window=100,
-            )
-
     def on_train_result(self, *, algorithm, metrics_logger=None, result, **kwargs):
 
-        win_rate = result[ENV_RUNNER_RESULTS]["win_rate"]
+        main_rew = result[ENV_RUNNER_RESULTS]["hist_stats"].pop("policy_main_reward")
+        opponent_rew_1 = result[ENV_RUNNER_RESULTS]["hist_stats"].pop("policy_random_1_reward")
+        opponent_rew_2 = list(result[ENV_RUNNER_RESULTS]["hist_stats"].values())[0]
+
+        assert len(main_rew) == len(opponent_rew_2) and len(main_rew) == len(opponent_rew_1)
+
+        won = 0
+        for r_main, r_opp1, r_opp2 in zip(main_rew, opponent_rew_1, opponent_rew_2):
+            if r_main > r_opp1 and r_main > r_opp2:
+                won += 1
+
+        win_rate = won / len(main_rew)
+
         print(f"Iter={algorithm.iteration} win-rate={win_rate} -> ", end="")
         # If win rate is good -> Snapshot current policy and play against
         # it next, keeping the snapshot fixed and only improving the "main"
