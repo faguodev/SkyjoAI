@@ -70,8 +70,8 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
         rewards = episode.get_rewards()
 
         if main_agent in rewards:
-            #True if main won False if not id of main is episode_id%3 (definition) id of winner is first
-            main_won = np.argmin(base_env.table.get_game_metrics()["final_score"]) == episode.episode_id % 3 #rewards[main_agent][-1] == 1.0
+            #True if main won False if not id of main
+            main_won = np.argmin(base_env.table.get_game_metrics()["final_score"]) == 0 #rewards[main_agent][-1] == 1.0
             metrics_logger.log_value(
                 "win_rate",
                 main_won,
@@ -99,7 +99,7 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
                 # (start player) and sometimes agent1 (player to move 2nd).
                 return (
                     "main"
-                    if episode.episode_id % 3 == agent_id
+                    if 0 == agent_id
                     else "main_v{}".format(
                         np.random.choice(list(range(1, self.current_opponent + 1)))
                     )
@@ -170,7 +170,7 @@ act_space = test_env.action_space
 
 #policy mapping for self_play: only one "main" policy is trained
 def policy_mapping_fn(agent_id, episode, worker, **kwargs):
-    return "main" if episode.episode_id % 3 == agent_id else "random"
+    return "main" if 0 == agent_id elif 1 == agent_id "random_1" else "random_2"
 
 config = (
     PPOConfig()
@@ -183,8 +183,8 @@ config = (
         )
     )
     #.callbacks(RewardDecayCallback)
-    .env_runners(num_env_runners=5)
-    .rollouts(num_rollout_workers=20, num_envs_per_worker=1)
+    .env_runners(num_env_runners=3)
+    .rollouts(num_rollout_workers=3, num_envs_per_worker=1)
     .resources(num_gpus=0)
     .multi_agent(
         policies={
@@ -236,3 +236,6 @@ tuner = tune.Tuner(
     #),
 )
 result = tuner.fit()
+
+#algo = config.build()
+#algo.train()
