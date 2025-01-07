@@ -26,7 +26,7 @@ logger.setLevel(logging.INFO)
 #max number of policy updates (can take multiple timesteps per iteration and train on this mini-batch)
 max_iterations = 100
 #max number of timesteps taken in game
-max_timesteps = 1000
+max_timesteps = 10000
 
 max_league_size = 5
 
@@ -185,7 +185,7 @@ config = (
     #.callbacks(RewardDecayCallback)
     .env_runners(num_env_runners=5)
     .rollouts(num_rollout_workers=20, num_envs_per_worker=1)
-    .resources(num_gpus=1)
+    .resources(num_gpus=0)
     .multi_agent(
         policies={
             "main": (None, obs_space[0], act_space[0], {"entropy_coeff":0.03}),
