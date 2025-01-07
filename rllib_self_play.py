@@ -177,9 +177,11 @@ config = (
     .training()#model=model_config, )
     .environment("skyjo", env_config=skyjo_config)
     .framework('torch')
-    .callbacks(functools(
-                SkyjoLogging_and_SelfPlayCallbacks, win_rate_threshold=0.85
-            ))
+    .callbacks(functools.partial(
+        SkyjoLogging_and_SelfPlayCallbacks,
+        win_rate_threshold=0.85,
+        )
+    )
     #.callbacks(RewardDecayCallback)
     .env_runners(num_env_runners=5)
     .rollouts(num_rollout_workers=20, num_envs_per_worker=1)
