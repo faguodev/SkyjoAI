@@ -66,12 +66,12 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
                 metric_name = f"n_hidden_cards_{agent_id}"
                 episode.custom_metrics[metric_name] = info["n_hidden_cards"]
 
-        main_agent = episode.episode_id % 3
+        main_agent = 0
         rewards = episode.get_rewards()
 
         if main_agent in rewards:
             #True if main won False if not id of main
-            main_won = np.argmin(base_env.table.get_game_metrics()["final_score"]) == 0 #rewards[main_agent][-1] == 1.0
+            main_won = np.argmin(base_env.table.get_game_metrics()["final_score"]) == main_agent #rewards[main_agent][-1] == 1.0
             metrics_logger.log_value(
                 "win_rate",
                 main_won,
