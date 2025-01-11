@@ -170,11 +170,11 @@ act_space = test_env.action_space
 
 #policy mapping for self_play: only one "main" policy is trained
 def policy_mapping_fn(agent_id, episode, worker, **kwargs):
-    if 0 == agent_id
+    if 0 == agent_id:
         return "main"
-    elif 1 == agent_id
+    elif 1 == agent_id:
         return "random_1"
-    else
+    else:
         return "random_2"
 
 config = (
