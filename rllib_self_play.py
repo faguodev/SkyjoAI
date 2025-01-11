@@ -51,7 +51,7 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
 
         self.win_rate_threshold = win_rate_threshold
 
-    def on_episode_end(self, *, worker, metrics_logger, base_env, policies, episode, **kwargs):
+    def on_episode_end(self, *, worker, base_env, policies, episode, **kwargs):
         """
         This is called at the end of each episode. We grab
         the final card sum from the `info` dict for each agent
@@ -66,7 +66,7 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
                 metric_name = f"n_hidden_cards_{agent_id}"
                 episode.custom_metrics[metric_name] = info["n_hidden_cards"]
 
-    def on_train_result(self, *, algorithm, metrics_logger=None, result, **kwargs):
+    def on_train_result(self, *, algorithm, result, **kwargs):
 
         main_rew = result[ENV_RUNNER_RESULTS]["hist_stats"].pop("policy_main_reward")
         opponent_rew_1 = result[ENV_RUNNER_RESULTS]["hist_stats"].pop("policy_random_1_reward")
@@ -189,8 +189,8 @@ config = (
     )
     #.callbacks(RewardDecayCallback)
     .env_runners(num_env_runners=3)
-    .rollouts(num_rollout_workers=3, num_envs_per_worker=1)
-    .resources(num_gpus=0)
+    .rollouts(num_rollout_workers=6, num_envs_per_worker=1)
+    .resources(num_gpus=1)
     .multi_agent(
         policies={
             "main": (None, obs_space[0], act_space[0], {"entropy_coeff":0.03}),
