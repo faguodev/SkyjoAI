@@ -97,13 +97,13 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
                 # agent_id = [0|1] -> policy depends on episode ID
                 # This way, we make sure that both policies sometimes play
                 # (start player) and sometimes agent1 (player to move 2nd).
-                return (
-                    "main"
-                    if agent_id == 0
-                    else "main_v{}".format(
+                if agent_id == 0:
+                    return "main"
+
+                else:
+                    return "main_v{}".format(
                         np.random.choice(list(range(1, self.current_opponent + 1)))
                     )
-                )
 
             main_policy = algorithm.get_policy("main")
             new_policy = algorithm.add_policy(
