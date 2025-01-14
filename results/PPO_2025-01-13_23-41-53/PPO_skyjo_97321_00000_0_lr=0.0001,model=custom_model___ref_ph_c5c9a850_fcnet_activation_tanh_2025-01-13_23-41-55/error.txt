@@ -1,0 +1,14 @@
+Failure # 1 (occurred at 2025-01-14_00-39-46)
+[36mray::PPO.train()[39m (pid=4550, ip=192.168.8.84, actor_id=75eafe52c9ca6aab30cdc13501000000, repr=PPO)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sebastian/Documents/Uni/ARL/SkyjoAI/env_sebi/lib/python3.12/site-packages/ray/tune/trainable/trainable.py", line 386, in train
+    self.log_result(result)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sebastian/Documents/Uni/ARL/SkyjoAI/env_sebi/lib/python3.12/site-packages/ray/rllib/algorithms/algorithm.py", line 2929, in log_result
+    self.callbacks.on_train_result(
+  File "/home/sebastian/Documents/Uni/ARL/SkyjoAI/rllib_self_play.py", line 109, in on_train_result
+    new_policy = algorithm.add_policy(
+                 ^^^^^^^^^^^^^^^^^^^^^
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: Algorithm.add_policy() missing 1 required positional argument: 'policy_id'
