@@ -24,11 +24,11 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 #max number of policy updates (can take multiple timesteps per iteration and train on this mini-batch)
-max_iterations = 100
+max_iterations = 10000000
 #max number of timesteps taken in game
-max_timesteps = 10000
+max_timesteps = 1000000000
 
-max_league_size = 5
+max_league_size = 100
 
 
 class RewardDecay_Callback(DefaultCallbacks):
@@ -107,6 +107,7 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
 
             main_policy = algorithm.get_policy("main")
             new_policy = algorithm.add_policy(
+                policy_id=new_pol_id,
                 policy_cls=type(main_policy),
                 policy_mapping_fn=policy_mapping_fn,
                 config=main_policy.config,
@@ -152,8 +153,8 @@ model_config = {
 }
 
 param_space = {
-    "lr": tune.grid_search([0.0001, 0.001, 0.01]),  # Learning rate options
-    "model": tune.grid_search([{"custom_model": TorchActionMaskModel, "fcnet_activation": "relu"}, {"custom_model": TorchActionMaskModel, "fcnet_activation": "tanh"}])
+    "lr": tune.grid_search([0.0001]),  # Learning rate options
+    "model": tune.grid_search([{"custom_model": TorchActionMaskModel, "fcnet_activation": "tanh"}]) #{"custom_model": TorchActionMaskModel, "fcnet_activation": "relu"}, 
 }
 
 def env_creator(config):
@@ -184,7 +185,7 @@ config = (
     .framework('torch')
     .callbacks(functools.partial(
         SkyjoLogging_and_SelfPlayCallbacks,
-        win_rate_threshold=0.85,
+        win_rate_threshold=0.9,
         )
     )
     #.callbacks(RewardDecayCallback)
