@@ -113,7 +113,7 @@ class SimpleSkyjoEnv(AECEnv):
 
     def update_action_reward_decay(self, action_reward_decay):
         self.action_reward_decay = action_reward_decay
-        print(action_reward_decay)
+        #print(action_reward_decay)
 
     def observation_space(self, agent):
         """
@@ -210,12 +210,14 @@ class SimpleSkyjoEnv(AECEnv):
             if last_action:
                 # player revealed all => we give final reward offset
                 self.rewards[current_agent] = self.final_reward_offest - card_sum[current_agent]
+
             else:
                 # simple delta-based reward
                 self.rewards[current_agent] = self.action_reward_decay * (score_before - score_after)
 
         # if the game is over, finalize
         if game_over:
+            #print("Reward_decay = ", self.action_reward_decay)
             if self.old_reward:
                 self.rewards = self._convert_to_dict(
                     self._calc_final_rewards(**(self.table.get_game_metrics()))
@@ -228,6 +230,12 @@ class SimpleSkyjoEnv(AECEnv):
             for idx, agent_id in enumerate(self.agents):
                 self.infos[agent_id]["final_card_sum"] = card_sums[idx]
                 self.infos[agent_id]["n_hidden_cards"] = n_hidden[idx]
+            
+                temp = min((self.rewards).values())
+                winners = [key for key in self.rewards if self.rewards[key] == temp]
+                for w in winners:
+                    self.rewards[w] += 0.5
+                self.infos[agent_id]["winner_ids"] = winners
 
         if last_action:
             self.truncations[current_agent] = True
