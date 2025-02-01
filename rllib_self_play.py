@@ -1,4 +1,5 @@
 from ray import tune, train, init, shutdown
+import numpy as np
 from ray.tune.registry import register_env
 from ray.rllib.env.wrappers.pettingzoo_env import PettingZooEnv
 from ray.rllib.algorithms.ppo import PPOConfig
@@ -14,7 +15,6 @@ from environment.skyjo_env import env as skyjo_env
 from ray.rllib.algorithms.callbacks import DefaultCallbacks
 import functools
 import logging
-import numpy as np
 import os
 import json
 
@@ -22,13 +22,6 @@ from models.action_mask_model import TorchActionMaskModel
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-
-#max number of policy updates (can take multiple timesteps per iteration and train on this mini-batch)
-max_iterations = 10000000
-#max number of timesteps taken in game
-max_timesteps = 1000000000
-
-max_league_size = 100
 
 
 class RewardDecay_Callback(DefaultCallbacks):
@@ -48,17 +41,26 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
         # 0=RandomPolicy, 1=1st main policy snapshot,
         # 2=2nd main policy snapshot, etc..
         self.current_opponent = 0
+        self.winning_policy = []
 
         self.win_rate_threshold = win_rate_threshold
 
-    def on_episode_end(self, *, worker, base_env, policies, episode, **kwargs):
+
+    def on_episode_end(        
+        self,
+        *,
+        episode,
+        **kwargs,): #policies, 
         """
         This is called at the end of each episode. We grab
         the final card sum from the `info` dict for each agent
         and log it as a custom metric.
         """
+        
+        #win_id = 0
         for agent_id in episode.get_agents():
             info = episode.last_info_for(agent_id)
+    
             if info is not None and "final_card_sum" in info:
                 metric_name = f"final_card_sum_{agent_id}"
                 episode.custom_metrics[metric_name] = info["final_card_sum"]
@@ -66,21 +68,45 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
                 metric_name = f"n_hidden_cards_{agent_id}"
                 episode.custom_metrics[metric_name] = info["n_hidden_cards"]
 
-    def on_train_result(self, *, algorithm, result, **kwargs):
+                #episode.custom_metrics["winning_policy"].append([episode.policy_for(id) for id in info["winner_ids"]])
+                
+    def on_train_result(
+        self,
+        *,
+        algorithm,
+        metrics_logger,
+        result,
+        **kwargs,
+        ):
 
+        #for p_id in self.playing_polices:
+        #    print("Policies playing: ", p_id)
+
+        
+        #opponent_rew_2 = result[ENV_RUNNER_RESULTS]["hist_stats"].pop(f"policy_{self.playing_polices[2]}_reward")
         main_rew = result[ENV_RUNNER_RESULTS]["hist_stats"].pop("policy_main_reward")
-        opponent_rew_1 = result[ENV_RUNNER_RESULTS]["hist_stats"].pop("policy_random_1_reward")
-        opponent_rew_2 = list(result[ENV_RUNNER_RESULTS]["hist_stats"].values())[0]
-
-        assert len(main_rew) == len(opponent_rew_2) and len(main_rew) == len(opponent_rew_1)
-
         won = 0
-        for r_main, r_opp1, r_opp2 in zip(main_rew, opponent_rew_1, opponent_rew_2):
-            if r_main > r_opp1 and r_main > r_opp2:
+        n_games = len(main_rew)
+        for rew in main_rew:
+            if rew%1 != 0:
                 won += 1
 
-        win_rate = won / len(main_rew)
+        win_rate = won/ len(main_rew)
 
+        # INFO: This only works with old rewards... 
+        # For new rewards, one needs to figure out a better way to do this.
+        # Unfortunately, the results lists will be of unequal length for the
+        # different policies, as they are not participating in the same number
+        # of games. One would need to figure out a way to reconstruct who played
+        # against whom.
+
+        #for r_main in main_rew:
+        #    if r_main == 100.0:
+        #        won += 1
+
+        #win_rate = won / len(main_rew)
+
+        
         print(f"Iter={algorithm.iteration} win-rate={win_rate} -> ", end="")
         # If win rate is good -> Snapshot current policy and play against
         # it next, keeping the snapshot fixed and only improving the "main"
@@ -128,7 +154,7 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
             print("not good enough; will keep learning ...")
 
         # +2 = main + random
-        result["league_size"] = self.current_opponent + 2
+        result["league_size"] = self.current_opponent + 3
 
         #print(f"Matchups:\n{self._matching_stats}")
 
@@ -148,14 +174,14 @@ skyjo_config = {
 model_config = {
     "custom_model": TorchActionMaskModel,
     # Add the following keys:
-    # "fcnet_hiddens": [1024, 1024, 1024, 512, 512],
-    "fcnet_activation": "tanh",
+    "fcnet_hiddens": [512, 512, 512, 512],
+    "fcnet_activation": "relu",
 }
 
-param_space = {
-    "lr": tune.grid_search([0.0001]),  # Learning rate options
-    "model": tune.grid_search([{"custom_model": TorchActionMaskModel, "fcnet_activation": "tanh"}]) #{"custom_model": TorchActionMaskModel, "fcnet_activation": "relu"}, 
-}
+# param_space = {
+#     "lr": tune.grid_search([0.0001, 0.001, 0.01]),  # Learning rate options
+#     "model": tune.grid_search([{"custom_model": TorchActionMaskModel, "fcnet_activation": "relu"}, {"custom_model": TorchActionMaskModel, "fcnet_activation": "tanh"}])
+# }
 
 def env_creator(config):
     return PettingZooEnv(skyjo_env(**config))
@@ -180,17 +206,17 @@ def policy_mapping_fn(agent_id, episode, worker, **kwargs):
 
 config = (
     PPOConfig()
-    .training()#model=model_config, )
+    .training(model=model_config, )
     .environment("skyjo", env_config=skyjo_config)
     .framework('torch')
     .callbacks(functools.partial(
         SkyjoLogging_and_SelfPlayCallbacks,
-        win_rate_threshold=0.9,
+        win_rate_threshold=0.5,
         )
     )
     #.callbacks(RewardDecayCallback)
-    .env_runners(num_env_runners=3)
-    .rollouts(num_rollout_workers=6, num_envs_per_worker=1)
+    .env_runners(num_env_runners=1)
+    .rollouts(num_rollout_workers=1, num_envs_per_worker=1)
     .resources(num_gpus=1)
     .multi_agent(
         policies={
@@ -212,36 +238,89 @@ config = (
     # )
 )
 
+
+algo = config.build()
+
+def convert_to_serializable(obj):
+    """Convert non-serializable objects to serializable types."""
+    if isinstance(obj, (np.float32, np.float64)):
+        return float(obj)
+    elif isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    else:
+        return "error"
+
+# trained_models_<beta>_<beta>_<beta>_<callback>
+config = "_others_indirect"
+model_save_dir = "v4_trained_models_old_rewards" + config
+os.makedirs(model_save_dir, exist_ok=True)
+max_steps = 1e6
+max_iters = 10000
+
+
+if not os.path.exists("logs4"):
+    os.mkdir("logs4")
+
+for iters in range(max_iters):
+    result = algo.train()
+
+    # Can be adjusted as needed
+    if iters % 100 == 0:
+        with open(f"logs4/result_iteration_{iters}.json", "w") as f:
+            json.dump(result, f, indent=4, default=convert_to_serializable)
+
+    if iters % 100 == 0:
+        checkpoint_dir = model_save_dir + f"/checkpoint_{iters}"
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        algo.save(checkpoint_dir)
+    if result["timesteps_total"] >= max_steps:
+        print(f"training done, because max_steps {max_steps} {result['timesteps_total']} reached")
+        break
+else:
+    print(f"training done, because max_iters {max_iters} reached")
+
+final_dir = model_save_dir + f"/final"
+os.makedirs(final_dir, exist_ok=True)
+algo.save(final_dir)
+
+#max number of policy updates (can take multiple timesteps per iteration and train on this mini-batch)
+#max_iterations = 100
+#max number of timesteps taken in game
+#max_timesteps = 10000
+#max number of policies in the league
+#max_league_size = 5
 #define stopping conditions for Self_play
 #Num_env_steps_samples_lifetime... max number of in game steps sampled
 #training_iteration... max num of updates to policy (max number of training steps)
 #"league_size"... min size of league (starts with size 3), therefore main is logged "league_size" -3 times
-stop = {
-    NUM_ENV_STEPS_SAMPLED_LIFETIME: max_timesteps,
-    TRAINING_ITERATION: max_iterations,
-    "league_size": max_league_size,
-}
+# stop = {
+#     NUM_ENV_STEPS_SAMPLED_LIFETIME: max_timesteps,
+#     TRAINING_ITERATION: max_iterations,
+#     "league_size": max_league_size,
+# }
 
-storage_path = os.path.join(os.getcwd(), "results")
+# storage_path = os.path.join(os.getcwd(), "results")
 
-tuner = tune.Tuner(
-    trainable="PPO",
-    param_space={**config.to_dict(), **param_space},
-    run_config=train.RunConfig(
-        stop=stop,
-        storage_path=storage_path,
-        checkpoint_config=train.CheckpointConfig(
-                checkpoint_frequency=1,
-                checkpoint_at_end=True,
-            ),
-    ),
-    #tune_config=tune.TuneConfig(
-            #num_samples=args.num_samples,
-            #max_concurrent_trials=args.max_concurrent_trials,
-            #scheduler=scheduler,
-    #),
-)
-result = tuner.fit()
+# tuner = tune.Tuner(
+#     trainable="PPO",
+#     param_space={**config.to_dict(), **param_space},
+#     run_config=train.RunConfig(
+#         stop=stop,
+#         storage_path=storage_path,
+#         checkpoint_config=train.CheckpointConfig(
+#                 checkpoint_frequency=1,
+#                 checkpoint_at_end=True,
+#             ),
+#     ),
+#     #tune_config=tune.TuneConfig(
+#             #num_samples=args.num_samples,
+#             #max_concurrent_trials=args.max_concurrent_trials,
+#             #scheduler=scheduler,
+#     #),
+# )
+# result = tuner.fit()
 
 #algo = config.build()
 #algo.train()
