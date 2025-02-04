@@ -51,7 +51,7 @@ skyjo_config = {
     "final_reward": 100,
     "score_per_unknown": 5.0,
     "action_reward_decay": 1.0,
-    "old_reward": True,
+    "old_reward": False,
     "render_mode": "human",
 }
 
@@ -82,7 +82,7 @@ config = (
     .callbacks(SkyjoLoggingCallbacks) 
     #.callbacks(RewardDecayCallback)
     .env_runners(num_env_runners=1)
-    # .rollouts(num_rollout_workers=6)
+    .rollouts(num_rollout_workers=6)
     .resources(num_gpus=1)
     .multi_agent(
         policies={
@@ -95,6 +95,7 @@ config = (
     .evaluation(evaluation_num_env_runners=0)
     .debugging(log_level="INFO")
 )
+config["simple_optimizer"]=True
 
 algo = config.build()
 
@@ -113,7 +114,7 @@ def convert_to_serializable(obj):
 config = "_others_direct"
 model_save_dir = "v3_trained_models_old_rewards" + config
 os.makedirs(model_save_dir, exist_ok=True)
-max_steps = 1e10
+max_steps = 10e10
 max_iters = 100000
 
 
@@ -122,6 +123,7 @@ if not os.path.exists("logs3"):
 
 for iters in range(max_iters):
     result = algo.train()
+    print("Iteration: ", iters)
 
     # Can be adjusted as needed
     if iters % 10 == 0:
@@ -135,8 +137,8 @@ for iters in range(max_iters):
     if result["timesteps_total"] >= max_steps:
         print(f"training done, because max_steps {max_steps} {result['timesteps_total']} reached")
         break
-else:
-    print(f"training done, because max_iters {max_iters} reached")
+    else:
+        print(f"training done, because max_iters {max_iters} reached")
 
 final_dir = model_save_dir + f"/final"
 os.makedirs(final_dir, exist_ok=True)
