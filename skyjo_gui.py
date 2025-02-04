@@ -20,7 +20,53 @@ def random_admissible_policy(obs):
     admissible_actions = [i for i, mask in enumerate(action_mask) if mask == 1]
     return random.choice(admissible_actions)
 
+def pre_programmed_smart_policy(obs):
+    observation = obs["observations"]
+    action_mask = obs["action_mask"]
+    admissible_actions = [i for i, mask in enumerate(action_mask) if mask == 1]
+    #check wether card still has to be taken from discard pile or draw pile
+    if 24 in admissible_actions:
+        #choose wether to take the upper most card from the discard pile or choose a random from the draw pile
 
+        #if card on discard pile has value smaller equal 3 take it
+        if 1 in observation[17:23]:
+            action = 25
+        #else draw random card from draw pile
+        else:
+            action = 24
+    #if card was already taken from deck/discard pile continue with placing/throwing away
+    else:
+        #go through one-hot-encoded hand cards to find value of hand card
+        for i, hand in enumerate(observation[34:51]):
+            if hand == 1:
+                hand_card_value = i - 2
+        #find position and highest value of players cards (here unknown cards are valued as 5)
+        max_card_value = -2
+        masked_cards = []
+        for i in range(12):
+            idx_start = i*17+51
+            #find value of current card (17th one-hot-encoded field is for refunded cards and therefore ignored)
+            for j, val in enumerate(observation[idx_start:idx_start+16]):
+                if val == 1:
+                    if j == 15:
+                        masked_cards.append(i)
+                        if max_card_value < 5:
+                            max_card_value = 5
+                            imax = i
+                    elif max_card_value < j - 2:
+                        max_card_value = j-2
+                        imax = i
+        #1st case hand card value is lower equal than 3 (if card was taken from discard this branch will be taken for 100%)
+        #place card on position with max_card_value
+        if hand_card_value <= 3:
+            action = imax
+        #else if hand is smaller than max_card_value replace card with higest value with handcard
+        elif hand_card_value < max_card_value:
+            action = imax
+        #else throw hand card away and reveal masked card
+        else:
+            action = 12 + masked_cards[0]
+    return action
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -38,7 +84,7 @@ class RewardDecayCallback(DefaultCallbacks):
 skyjo_config_old = {
     "num_players": 3,
     "score_penalty": 2.0,
-    "observe_other_player_indirect": True,
+    "observe_other_player_indirect": False,
     "mean_reward": 1.0,
     "reward_refunded": 10,
     "final_reward": 100,
@@ -89,9 +135,9 @@ config_old = (
 )
 
 algo_old = config_old.build()
-model_save_dir_old = "v3_trained_models_old_rewards_0.03_0.03_0.03_false"
-final_dir_old = model_save_dir_old + f"/checkpoint_100"
-algo_old.restore(final_dir_old)
+#model_save_dir_old = "v3_trained_models_old_rewards_0.03_0.03_0.03_false"
+#final_dir_old = model_save_dir_old + f"/checkpoint_100"
+#algo_old.restore(final_dir_old)
 
 def policy_two(obs):
     policy = algo_old.get_policy(policy_id=policy_mapping_fn(0, None))
@@ -422,7 +468,7 @@ class SkyjoGUI:
 if __name__ == "__main__":
     # Define player types: 'human' or an AI function
     player_types = [
-        policy_two,
+        pre_programmed_smart_policy,
         random_admissible_policy,
         #policy_one,
         'human',

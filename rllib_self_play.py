@@ -23,6 +23,55 @@ from models.action_mask_model import TorchActionMaskModel
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+def pre_programmed_smart_policy(obs):
+    observation = obs["observations"]
+    action_mask = obs["action_mask"]
+    admissible_actions = [i for i, mask in enumerate(action_mask) if mask == 1]
+    #check wether card still has to be taken from discard pile or draw pile
+    if 24 in admissible_actions:
+        #choose wether to take the upper most card from the discard pile or choose a random from the draw pile
+
+        #if card on discard pile has value smaller equal 3 take it
+        if 1 in observation[17:23]:
+            action = 25
+        #else draw random card from draw pile
+        else:
+            action = 24
+    #if card was already taken from deck/discard pile continue with placing/throwing away
+    else:
+        #go through one-hot-encoded hand cards to find value of hand card
+        for i, hand in enumerate(observation[34:51]):
+            if hand == 1:
+                hand_card_value = i - 2
+        #find position and highest value of players cards (here unknown cards are valued as 5)
+        max_card_value = -2
+        masked_cards = []
+        for i in range(12):
+            idx_start = i*17+51
+            #find value of current card (17th one-hot-encoded field is for refunded cards and therefore ignored)
+            for j, val in enumerate(observation[idx_start:idx_start+16]):
+                if val == 1:
+                    if j == 15:
+                        masked_cards.append(i)
+                        if max_card_value < 5:
+                            max_card_value = 5
+                            imax = i
+                    elif max_card_value < j - 2:
+                        max_card_value = j-2
+                        imax = i
+        #1st case hand card value is lower equal than 3 (if card was taken from discard this branch will be taken for 100%)
+        #place card on position with max_card_value
+        if hand_card_value <= 3:
+            action = imax
+        #else if hand is smaller than max_card_value replace card with higest value with handcard
+        elif hand_card_value < max_card_value:
+            action = imax
+        #else throw hand card away and reveal masked card
+        else:
+            action = 12 + masked_cards[0]
+    return action
+
+
 
 class RewardDecay_Callback(DefaultCallbacks):
     def on_train_result(self, *, algorithm, result, **kwargs):
@@ -200,9 +249,9 @@ def policy_mapping_fn(agent_id, episode, worker, **kwargs):
     if 0 == agent_id:
         return "main"
     elif 1 == agent_id:
-        return "random_1"
+        return "policy_1"
     else:
-        return "random_2"
+        return "policy_2"
 
 config = (
     PPOConfig()
@@ -221,8 +270,8 @@ config = (
     .multi_agent(
         policies={
             "main": (None, obs_space[0], act_space[0], {"entropy_coeff":0.03}),
-            "random_1": (None, obs_space[1], act_space[1], {"entropy_coeff":0.03}),
-            "random_2": (None, obs_space[2], act_space[2], {"entropy_coeff":0.03})
+            "policy_1": (None, obs_space[1], act_space[1], {"entropy_coeff":0.03}),
+            "policy_2": (None, obs_space[2], act_space[2], {"entropy_coeff":0.03})
         },
         policy_mapping_fn=policy_mapping_fn,#(lambda agent_id, *args, **kwargs: agent_id),
         policies_to_train=["main"],
