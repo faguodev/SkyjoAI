@@ -45,7 +45,7 @@ class SimpleSkyjoEnv(AECEnv):
         final_reward: float = 100.0,
         score_per_unknown: float = 5.0,
         action_reward_decay: float = 1.0,
-        final_reward_offest: float = 0.0,
+        final_reward_offset: float = 0.0,
         old_reward: bool = False,
         render_mode=None
     ):
@@ -59,7 +59,7 @@ class SimpleSkyjoEnv(AECEnv):
         self.reward_refunded = reward_refunded
         self.final_reward = final_reward
         self.action_reward_decay = action_reward_decay
-        self.final_reward_offest = final_reward_offest
+        self.final_reward_offset = final_reward_offset
         self.score_per_unknown = score_per_unknown
         self.old_reward = old_reward
 
@@ -207,21 +207,24 @@ class SimpleSkyjoEnv(AECEnv):
         score_after = card_sum[current_agent]
 
         if not self.old_reward:
-            if last_action:
-                # player revealed all => we give final reward offset
-                self.rewards[current_agent] = self.final_reward_offest - card_sum[current_agent]
-
-            else:
+            # if last_action:
+            #     # player revealed all => we give final reward offset
+            #     self.rewards[current_agent] = self.final_reward_offset - card_sum[current_agent]
+            #
+            # else:
                 # simple delta-based reward
                 self.rewards[current_agent] = self.action_reward_decay * (score_before - score_after)
 
         # if the game is over, finalize
         if game_over:
             #print("Reward_decay = ", self.action_reward_decay)
-            if self.old_reward:
-                self.rewards = self._convert_to_dict(
-                    self._calc_final_rewards(**(self.table.get_game_metrics()))
-                )
+            # if self.old_reward:
+            #     self.rewards = self._convert_to_dict(
+            #         self._calc_final_rewards(**(self.table.get_game_metrics()))
+            #     )
+            self.rewards = self._convert_to_dict(
+                self._calc_final_rewards(**(self.table.get_game_metrics()))
+            )
             self.terminations = {i: True for i in self.agents}
 
 

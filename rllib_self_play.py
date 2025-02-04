@@ -36,14 +36,14 @@ class RewardDecay_Callback(DefaultCallbacks):
 
 class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
 
-    def __init__(self, win_rate_threshold):
+    def __init__(self, win_rate_threshold, action_reward_reduction):
         super().__init__()
         # 0=RandomPolicy, 1=1st main policy snapshot,
         # 2=2nd main policy snapshot, etc..
         self.current_opponent = 0
         self.winning_policy = []
-
         self.win_rate_threshold = win_rate_threshold
+        self.action_reward_reduction = action_reward_reduction
 
 
     def on_episode_end(        
@@ -107,7 +107,12 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
         #win_rate = won / len(main_rew)
 
         
-        print(f"Iter={algorithm.iteration} win-rate={win_rate} -> ", end="")
+        print(f"Iter={algorithm.iteration} win-rate={win_rate:3f}, reward_decay={algorithm.config.env_config['action_reward_decay']:3f} -> ", end="")
+
+
+        action_reward_reduction = max(0.01, algorithm.config.env_config["action_reward_decay"] * 0.95)
+        algorithm.config.env_config["action_reward_decay"] = action_reward_reduction
+
         # If win rate is good -> Snapshot current policy and play against
         # it next, keeping the snapshot fixed and only improving the "main"
         # policy.
@@ -149,7 +154,7 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
             # We need to sync the just copied local weights (from main policy)
             # to all the remote workers as well.
             algorithm.env_runner_group.sync_weights()
-
+            algorithm.config.env_config['action_reward_decay'] = self.action_reward_reduction
         else:
             print("not good enough; will keep learning ...")
 
@@ -166,7 +171,8 @@ skyjo_config = {
     "reward_refunded": 10,
     "final_reward": 100,
     "score_per_unknown": 5.0,
-    "action_reward_decay": 1.0,
+    "action_reward_decay": 0.2,
+    "final_reward_offset": 150.0,
     "old_reward": False,
     "render_mode": "human",
 }
@@ -174,7 +180,7 @@ skyjo_config = {
 model_config = {
     "custom_model": TorchActionMaskModel,
     # Add the following keys:
-    "fcnet_hiddens": [512, 512, 512, 512],
+    "fcnet_hiddens": [2048, 2048, 1024, 512],
     "fcnet_activation": "relu",
 }
 
@@ -210,13 +216,14 @@ config = (
     .environment("skyjo", env_config=skyjo_config)
     .framework('torch')
     .callbacks(functools.partial(
-        SkyjoLogging_and_SelfPlayCallbacks,
-        win_rate_threshold=0.5,
+            SkyjoLogging_and_SelfPlayCallbacks,
+            win_rate_threshold=0.9,
+            action_reward_reduction=0.2,
         )
     )
     #.callbacks(RewardDecayCallback)
-    .env_runners(num_env_runners=1)
-    .rollouts(num_rollout_workers=1, num_envs_per_worker=1)
+    .env_runners(num_env_runners=5)
+    .rollouts(num_rollout_workers=5, num_envs_per_worker=2)
     .resources(num_gpus=1)
     .multi_agent(
         policies={
@@ -267,11 +274,11 @@ for iters in range(max_iters):
     result = algo.train()
 
     # Can be adjusted as needed
-    if iters % 100 == 0:
+    if iters % 1 == 0:
         with open(f"logs4/result_iteration_{iters}.json", "w") as f:
             json.dump(result, f, indent=4, default=convert_to_serializable)
 
-    if iters % 100 == 0:
+    if iters % 10 == 0:
         checkpoint_dir = model_save_dir + f"/checkpoint_{iters}"
         os.makedirs(checkpoint_dir, exist_ok=True)
         algo.save(checkpoint_dir)
