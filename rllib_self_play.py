@@ -3,6 +3,8 @@ import numpy as np
 from ray.tune.registry import register_env
 from ray.rllib.env.wrappers.pettingzoo_env import PettingZooEnv
 from ray.rllib.algorithms.ppo import PPOConfig
+from ray.rllib.policy.policy import Policy
+import random
 #from ray.tune.stopper import MaximumIterationStopper
 from ray.air.constants import TRAINING_ITERATION
 from ray.rllib.utils.metrics import (
@@ -22,55 +24,6 @@ from models.action_mask_model import TorchActionMaskModel
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-
-def pre_programmed_smart_policy(obs):
-    observation = obs["observations"]
-    action_mask = obs["action_mask"]
-    admissible_actions = [i for i, mask in enumerate(action_mask) if mask == 1]
-    #check wether card still has to be taken from discard pile or draw pile
-    if 24 in admissible_actions:
-        #choose wether to take the upper most card from the discard pile or choose a random from the draw pile
-
-        #if card on discard pile has value smaller equal 3 take it
-        if 1 in observation[17:23]:
-            action = 25
-        #else draw random card from draw pile
-        else:
-            action = 24
-    #if card was already taken from deck/discard pile continue with placing/throwing away
-    else:
-        #go through one-hot-encoded hand cards to find value of hand card
-        for i, hand in enumerate(observation[34:51]):
-            if hand == 1:
-                hand_card_value = i - 2
-        #find position and highest value of players cards (here unknown cards are valued as 5)
-        max_card_value = -2
-        masked_cards = []
-        for i in range(12):
-            idx_start = i*17+51
-            #find value of current card (17th one-hot-encoded field is for refunded cards and therefore ignored)
-            for j, val in enumerate(observation[idx_start:idx_start+16]):
-                if val == 1:
-                    if j == 15:
-                        masked_cards.append(i)
-                        if max_card_value < 5:
-                            max_card_value = 5
-                            imax = i
-                    elif max_card_value < j - 2:
-                        max_card_value = j-2
-                        imax = i
-        #1st case hand card value is lower equal than 3 (if card was taken from discard this branch will be taken for 100%)
-        #place card on position with max_card_value
-        if hand_card_value <= 3:
-            action = imax
-        #else if hand is smaller than max_card_value replace card with higest value with handcard
-        elif hand_card_value < max_card_value:
-            action = imax
-        #else throw hand card away and reveal masked card
-        else:
-            action = 12 + masked_cards[0]
-    return action
-
 
 
 class RewardDecay_Callback(DefaultCallbacks):
@@ -207,6 +160,123 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
 
         #print(f"Matchups:\n{self._matching_stats}")
 
+class PreProgrammedPolicy(Policy):
+    def compute_actions(
+        self,
+        obs,
+        state_batches,
+        prev_action_batch,
+        prev_reward_batch,
+        info_batch,
+        episodes,
+        explore,
+        timestep,
+        **kwargs,
+
+    ):
+        #hier passt glaub ich iwas nicht....
+        action_mask = obs[0][:26] #["action_mask"]
+        observation = obs[0][26:] #["observations"]
+        action = 26
+
+        admissible_actions = [i for i, mask in enumerate(action_mask) if mask == 1]
+        #check wether card still has to be taken from discard pile or draw pile
+        if 24 in admissible_actions:
+            #choose wether to take the upper most card from the discard pile or choose a random from the draw pile
+
+            #if card on discard pile has value smaller equal 3 take it
+            if 1 in observation[17:23]:
+                action = 25
+            #else draw random card from draw pile
+            else:
+                action = 24
+        #if card was already taken from deck/discard pile continue with placing/throwing away
+        else:
+            #go through one-hot-encoded hand cards to find value of hand card
+            for i, hand in enumerate(observation[34:50]):
+                if hand == 1:
+                    hand_card_value = i - 2
+            #find position and highest value of players cards (here unknown cards are valued as 5)
+            max_card_value = -2
+            masked_cards = []
+            for i in range(12):
+                idx_start = i*17+51
+                #print("starting idx:",idx_start)
+                #print("observation looping through: ", observation[idx_start:idx_start+16])
+                #find value of current card (17th one-hot-encoded field is for refunded cards and therefore ignored)
+                for j, val in enumerate(observation[idx_start:idx_start+16]):
+                    if val == 1:
+                        if j == 15:
+                            masked_cards.append(i)
+                            #print(f"appending {i}")
+                            if max_card_value < 5:
+                                max_card_value = 5
+                                imax = i
+                        elif max_card_value < j - 2:
+                            max_card_value = j-2
+                            imax = i
+            #print(masked_cards)
+
+            #1st case hand card value is lower equal than 3 (if card was taken from discard this branch will be taken for 100%)
+            #place card on position with max_card_value
+            if hand_card_value <= 3:
+                action = imax
+            #else if hand is smaller than max_card_value replace card with higest value with handcard
+            elif hand_card_value < max_card_value:
+                action = imax
+            #else throw hand card away and reveal masked card
+            else:
+                action = 12 + random.choice(masked_cards)
+                for a in admissible_actions:
+                    if a in np.array(masked_cards) + 12:
+                        action = a
+                #print(action, "chosen action - observation: ", observation[(51 + (action-12)*17):(68 + (action-12)*17)])
+            assert action != 26, ("No Valid action was chosen!")
+
+        return np.asarray([action]), [], {}
+
+    def learn_on_batch(self, samples):
+        return {}  # No learning, as this is a fixed policy.
+
+    def get_weights(self):
+        return {}
+
+    def set_weights(self, weights):
+        pass
+
+
+class RandomPolicy(Policy):
+    def compute_actions(
+        self,
+        obs,
+        state_batches,
+        prev_action_batch,
+        prev_reward_batch,
+        info_batch,
+        episodes,
+        explore,
+        timestep,
+        **kwargs,
+
+    ):
+        
+        action_mask = obs[0][:26] #["action_mask"]
+        observation = obs[0][26:] #["observations"]
+
+        admissible_actions = [i for i, mask in enumerate(action_mask) if mask == 1]
+        action = random.choice(admissible_actions)
+        return np.asarray([action]), [], {}
+
+    def learn_on_batch(self, samples):
+        return {}  # No learning, as this is a fixed policy.
+
+    def get_weights(self):
+        return {}
+
+    def set_weights(self, weights):
+        pass
+
+
 skyjo_config = {
     "num_players": 3,
     "score_penalty": 2.0,
@@ -223,7 +293,7 @@ skyjo_config = {
 model_config = {
     "custom_model": TorchActionMaskModel,
     # Add the following keys:
-    "fcnet_hiddens": [512, 512, 512, 512],
+    "fcnet_hiddens": [1024, 1024, 1024, 512, 512],
     "fcnet_activation": "relu",
 }
 
@@ -253,16 +323,12 @@ def policy_mapping_fn(agent_id, episode, worker, **kwargs):
     else:
         return "policy_2"
 
-config = (
+config_pre_train = (
     PPOConfig()
     .training(model=model_config, )
     .environment("skyjo", env_config=skyjo_config)
     .framework('torch')
-    .callbacks(functools.partial(
-        SkyjoLogging_and_SelfPlayCallbacks,
-        win_rate_threshold=0.5,
-        )
-    )
+    .callbacks(RewardDecay_Callback)
     #.callbacks(RewardDecayCallback)
     .env_runners(num_env_runners=1)
     .rollouts(num_rollout_workers=1, num_envs_per_worker=1)
@@ -270,8 +336,8 @@ config = (
     .multi_agent(
         policies={
             "main": (None, obs_space[0], act_space[0], {"entropy_coeff":0.03}),
-            "policy_1": (None, obs_space[1], act_space[1], {"entropy_coeff":0.03}),
-            "policy_2": (None, obs_space[2], act_space[2], {"entropy_coeff":0.03})
+            "policy_1": (PreProgrammedPolicy, obs_space[1], act_space[1], {}),
+            "policy_2": (PreProgrammedPolicy, obs_space[2], act_space[2], {}),
         },
         policy_mapping_fn=policy_mapping_fn,#(lambda agent_id, *args, **kwargs: agent_id),
         policies_to_train=["main"],
@@ -287,8 +353,41 @@ config = (
     # )
 )
 
+config = (
+    PPOConfig()
+    .training(model=model_config, )
+    .environment("skyjo", env_config=skyjo_config)
+    .framework('torch')
+    .callbacks(functools.partial(
+        SkyjoLogging_and_SelfPlayCallbacks,
+        win_rate_threshold=0.75,
+        )
+    )
+    #.callbacks(RewardDecayCallback)
+    .env_runners(num_env_runners=1)
+    .rollouts(num_rollout_workers=1, num_envs_per_worker=10)
+    .resources(num_gpus=1)
+    .multi_agent(
+        policies={
+            "main": (None, obs_space[0], act_space[0], {"entropy_coeff":0.03}),
+            "policy_1": (None, obs_space[1], act_space[1], {"entropy_coeff":0.03}),
+            "policy_2": (None, obs_space[2], act_space[2], {"entropy_coeff":0.03}),
+        },
+        policy_mapping_fn=policy_mapping_fn,#(lambda agent_id, *args, **kwargs: agent_id),
+        policies_to_train=["main"],
+    )
+    .evaluation(evaluation_num_env_runners=0)
+    .debugging(log_level="INFO")
+    .api_stack(
+        enable_rl_module_and_learner=False,
+        # enable_env_runner_and_connector_v2=True,
+    )
+    # .training()
+    #     lr = ,
+    # )
+)
 
-algo = config.build()
+algo = config_pre_train.build()
 
 def convert_to_serializable(obj):
     """Convert non-serializable objects to serializable types."""
@@ -302,15 +401,15 @@ def convert_to_serializable(obj):
         return "error"
 
 # trained_models_<beta>_<beta>_<beta>_<callback>
-config = "_others_indirect"
-model_save_dir = "v4_trained_models_old_rewards" + config
+config = "_others_direct_old_rewards"
+model_save_dir = "v0_pre_trained_model" + config
 os.makedirs(model_save_dir, exist_ok=True)
 max_steps = 1e6
-max_iters = 10000
+max_iters = 10
 
 
-if not os.path.exists("logs4"):
-    os.mkdir("logs4")
+if not os.path.exists("logs0"):
+    os.mkdir("logs0")
 
 for iters in range(max_iters):
     result = algo.train()
@@ -333,43 +432,3 @@ else:
 final_dir = model_save_dir + f"/final"
 os.makedirs(final_dir, exist_ok=True)
 algo.save(final_dir)
-
-#max number of policy updates (can take multiple timesteps per iteration and train on this mini-batch)
-#max_iterations = 100
-#max number of timesteps taken in game
-#max_timesteps = 10000
-#max number of policies in the league
-#max_league_size = 5
-#define stopping conditions for Self_play
-#Num_env_steps_samples_lifetime... max number of in game steps sampled
-#training_iteration... max num of updates to policy (max number of training steps)
-#"league_size"... min size of league (starts with size 3), therefore main is logged "league_size" -3 times
-# stop = {
-#     NUM_ENV_STEPS_SAMPLED_LIFETIME: max_timesteps,
-#     TRAINING_ITERATION: max_iterations,
-#     "league_size": max_league_size,
-# }
-
-# storage_path = os.path.join(os.getcwd(), "results")
-
-# tuner = tune.Tuner(
-#     trainable="PPO",
-#     param_space={**config.to_dict(), **param_space},
-#     run_config=train.RunConfig(
-#         stop=stop,
-#         storage_path=storage_path,
-#         checkpoint_config=train.CheckpointConfig(
-#                 checkpoint_frequency=1,
-#                 checkpoint_at_end=True,
-#             ),
-#     ),
-#     #tune_config=tune.TuneConfig(
-#             #num_samples=args.num_samples,
-#             #max_concurrent_trials=args.max_concurrent_trials,
-#             #scheduler=scheduler,
-#     #),
-# )
-# result = tuner.fit()
-
-#algo = config.build()
-#algo.train()
