@@ -48,7 +48,7 @@ class SkyjoGame(object):
 
         # >>> ADJUSTED OBSERVATION SHAPE <<<
         # The first 17 entries are still integer-based "global stats" (1 + 1 + 15).
-        # Then we add 2 single-card fields (top_discard + hand_card), each 17 dims => +34
+        # Then we add 2 single-card fields (top_discard + hand), each 17 dims => +34
         # Finally, for the player's cards:
         #   - If indirect => only own 12 => 12*17 = 204
         #   - If direct   => all players => num_players*12*17
@@ -60,6 +60,8 @@ class SkyjoGame(object):
 
         self.action_mask_shape = (26,)
         self.previous_action = None
+
+        self.has_terminated = False
 
         # reset
         self.reset()
@@ -368,10 +370,12 @@ class SkyjoGame(object):
         in the order: current_player first, then the rest
         """
         cards = np.full_like(players_cards, fill_unknown)
-        all_ids = np.roll(np.arange(players_cards.shape[0]), player_id)
-        for pl in all_ids:
+        all_ids = np.roll(np.arange(players_cards.shape[0]), - player_id)
+        #print(f"all_ids with player_id{player_id}: ", all_ids)
+        for i,pl in enumerate(all_ids):
             masked_revealed = players_masked[pl] != 2
-            cards[pl][masked_revealed] = players_cards[pl][masked_revealed]
+            cards[i][masked_revealed] = players_cards[pl][masked_revealed]
+        
         return list(cards.flatten())
 
     # [end: collect observation]
@@ -432,6 +436,9 @@ class SkyjoGame(object):
             )
             game_over = True
 
+        #print("In Game_class - player_cards: ", self.players_cards)
+        #print(f"hidden_cards of player {player_id} after acting:", [i for i, val in enumerate(self.players_masked[player_id]) if val == 2])
+
         return game_over, last_action
 
     def _action_draw_card(self, player_id: int, draw_from: int):
@@ -488,7 +495,7 @@ class SkyjoGame(object):
             )
             place_pos = action_place_to_pos - 12
             assert self.players_masked[player_id][place_pos] == 2, (
-                f"illegal action: card is already revealed."
+                f"illegal action: card {place_pos} is already revealed."
             )
             self.discard_pile.append(self.hand_card)
             self.players_masked[player_id][place_pos] = 1
