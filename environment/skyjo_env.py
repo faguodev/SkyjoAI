@@ -47,7 +47,7 @@ class SimpleSkyjoEnv(AECEnv):
         action_reward_decay: float = 1.0,
         final_reward_offest: float = 0.0,
         old_reward: bool = False,
-        render_mode=None
+        render_mode=None,
     ):
         """
         PettingZoo AEC Env for SkyJo
@@ -62,7 +62,7 @@ class SimpleSkyjoEnv(AECEnv):
         self.final_reward_offest = final_reward_offest
         self.score_per_unknown = score_per_unknown
         self.old_reward = old_reward
-
+        
         self.table = SkyjoGame(
             num_players=num_players,
             score_penalty=score_penalty,
@@ -191,6 +191,7 @@ class SimpleSkyjoEnv(AECEnv):
             None: 
         """  
         current_agent = self.agent_selection
+        #print(current_agent)
 
         # if was done before
         if self.terminations[current_agent]:
@@ -202,6 +203,9 @@ class SimpleSkyjoEnv(AECEnv):
 
         game_over, last_action = self.table.act(current_agent, action_int=action)
 
+        hidden_c = self.observe(current_agent)["observations"][15::17]
+        #print(f"In Env_class - hidden cards of actor {current_agent}",[i for i, val in enumerate(hidden_c[3:15]) if val == 1])
+
         # score after
         n_hidden_cards, card_sum = self.table.collect_hidden_card_sums()
         score_after = card_sum[current_agent]
@@ -209,8 +213,7 @@ class SimpleSkyjoEnv(AECEnv):
         if not self.old_reward:
             if last_action:
                 # player revealed all => we give final reward offset
-                self.rewards[current_agent] = self.final_reward_offest - card_sum[current_agent]
-
+                self.rewards[current_agent] = self.final_reward_offest - 4 * card_sum[current_agent]
             else:
                 # simple delta-based reward
                 self.rewards[current_agent] = self.action_reward_decay * (score_before - score_after)
@@ -218,10 +221,10 @@ class SimpleSkyjoEnv(AECEnv):
         # if the game is over, finalize
         if game_over:
             #print("Reward_decay = ", self.action_reward_decay)
-            if self.old_reward:
-                self.rewards = self._convert_to_dict(
-                    self._calc_final_rewards(**(self.table.get_game_metrics()))
-                )
+            #if self.old_reward:
+            self.rewards = self._convert_to_dict(
+                self._calc_final_rewards(**(self.table.get_game_metrics()))
+            )
             self.terminations = {i: True for i in self.agents}
 
 
@@ -233,8 +236,9 @@ class SimpleSkyjoEnv(AECEnv):
             
                 temp = min((self.rewards).values())
                 winners = [key for key in self.rewards if self.rewards[key] == temp]
-                for w in winners:
-                    self.rewards[w] += 0.5
+                if not self.old_reward:
+                    for w in winners:
+                        self.rewards[w] += 0.5
                 self.infos[agent_id]["winner_ids"] = winners
 
         if last_action:
@@ -245,6 +249,8 @@ class SimpleSkyjoEnv(AECEnv):
         # next agent
         if not game_over:
             self.agent_selection = self._expected_agentname_and_action()[0]
+        
+        #if self.agent_selection != current_agent
 
     def reset(self, seed: int = None, options=None) -> None:
         """
@@ -274,6 +280,7 @@ class SimpleSkyjoEnv(AECEnv):
     def close(self) -> None:
         """part of the PettingZoo API"""
         pass
+
 
     # --------------------------- UTILITIES --------------------------- #
 
