@@ -198,17 +198,14 @@ class SimpleSkyjoEnv(AECEnv):
             return self._was_dead_step(None)
 
         # reward shaping: score before
-        _, card_sum = self.table.collect_hidden_card_sums()
-        score_before = card_sum[current_agent]
+        n_hidden, card_sum = self.table.collect_hidden_card_sums()
+        score_before = card_sum[current_agent] + self.score_per_unknown * n_hidden[current_agent]
 
         game_over, last_action = self.table.act(current_agent, action_int=action)
 
-        hidden_c = self.observe(current_agent)["observations"][15::17]
-        #print(f"In Env_class - hidden cards of actor {current_agent}",[i for i, val in enumerate(hidden_c[3:15]) if val == 1])
-
         # score after
-        n_hidden_cards, card_sum = self.table.collect_hidden_card_sums()
-        score_after = card_sum[current_agent]
+        n_hidden, card_sum = self.table.collect_hidden_card_sums()
+        score_after = card_sum[current_agent] + self.score_per_unknown * n_hidden[current_agent]
 
         if not self.old_reward:
             if last_action:
