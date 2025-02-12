@@ -213,7 +213,7 @@ class SimpleSkyjoEnv(AECEnv):
         if not self.old_reward:
             if last_action:
                 # player revealed all => we give final reward offset
-                self.rewards[current_agent] = self.final_reward_offest - 4 * card_sum[current_agent]
+                self.rewards[current_agent] = self.final_reward_offest - 3 * card_sum[current_agent]
             else:
                 # simple delta-based reward
                 self.rewards[current_agent] = self.action_reward_decay * (score_before - score_after)
@@ -234,7 +234,7 @@ class SimpleSkyjoEnv(AECEnv):
                 self.infos[agent_id]["final_card_sum"] = card_sums[idx]
                 self.infos[agent_id]["n_hidden_cards"] = n_hidden[idx]
             
-                temp = min((self.rewards).values())
+                temp = max((self.rewards).values())
                 winners = [key for key in self.rewards if self.rewards[key] == temp]
                 if not self.old_reward:
                     for w in winners:
