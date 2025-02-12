@@ -47,7 +47,7 @@ class SimpleSkyjoEnv(AECEnv):
         action_reward_decay: float = 1.0,
         final_reward_offset: float = 0.0,
         old_reward: bool = False,
-        render_mode=None
+        render_mode=None,
     ):
         """
         PettingZoo AEC Env for SkyJo
@@ -202,6 +202,9 @@ class SimpleSkyjoEnv(AECEnv):
 
         game_over, last_action = self.table.act(current_agent, action_int=action)
 
+        hidden_c = self.observe(current_agent)["observations"][15::17]
+        #print(f"In Env_class - hidden cards of actor {current_agent}",[i for i, val in enumerate(hidden_c[3:15]) if val == 1])
+
         # score after
         n_hidden_cards, card_sum = self.table.collect_hidden_card_sums()
         score_after = card_sum[current_agent]
@@ -234,10 +237,11 @@ class SimpleSkyjoEnv(AECEnv):
                 self.infos[agent_id]["final_card_sum"] = card_sums[idx]
                 self.infos[agent_id]["n_hidden_cards"] = n_hidden[idx]
             
-                temp = min((self.rewards).values())
+                temp = max((self.rewards).values())
                 winners = [key for key in self.rewards if self.rewards[key] == temp]
-                for w in winners:
-                    self.rewards[w] += 0.5
+                if not self.old_reward:
+                    for w in winners:
+                        self.rewards[w] += 0.5
                 self.infos[agent_id]["winner_ids"] = winners
 
         if last_action:

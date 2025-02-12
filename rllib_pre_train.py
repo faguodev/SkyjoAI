@@ -38,14 +38,14 @@ class RewardDecay_Callback(DefaultCallbacks):
 
 class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
 
-    def __init__(self, win_rate_threshold, action_reward_reduction):
+    def __init__(self, win_rate_threshold):
         super().__init__()
         # 0=RandomPolicy, 1=1st main policy snapshot,
         # 2=2nd main policy snapshot, etc..
         self.current_opponent = 0
         self.winning_policy = []
+
         self.win_rate_threshold = win_rate_threshold
-        self.action_reward_reduction = action_reward_reduction
 
 
     def on_episode_end(        
@@ -86,7 +86,7 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
 
         
         #opponent_rew_2 = result[ENV_RUNNER_RESULTS]["hist_stats"].pop(f"policy_{self.playing_polices[2]}_reward")
-        main_rew = result[ENV_RUNNER_RESULTS]["hist_stats"]["policy_main_reward"] #.pop("policy_main_reward")
+        main_rew = result[ENV_RUNNER_RESULTS]["hist_stats"].pop("policy_main_reward")
         won = 0
         n_games = len(main_rew)
         for rew in main_rew:
@@ -109,12 +109,7 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
         #win_rate = won / len(main_rew)
 
         
-        print(f"Iter={algorithm.iteration} win-rate={win_rate:3f}, reward_decay={algorithm.config.env_config['action_reward_decay']:3f} -> ", end="")
-
-
-        action_reward_reduction = max(0.01, algorithm.config.env_config["action_reward_decay"] * 0.95)
-        algorithm.config.env_config["action_reward_decay"] = action_reward_reduction
-
+        print(f"Iter={algorithm.iteration} win-rate={win_rate} -> ", end="")
         # If win rate is good -> Snapshot current policy and play against
         # it next, keeping the snapshot fixed and only improving the "main"
         # policy.
@@ -156,7 +151,7 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
             # We need to sync the just copied local weights (from main policy)
             # to all the remote workers as well.
             algorithm.env_runner_group.sync_weights()
-            algorithm.config.env_config['action_reward_decay'] = self.action_reward_reduction
+
         else:
             print("not good enough; will keep learning ...")
 
@@ -183,6 +178,7 @@ class PreProgrammedPolicy(Policy):
         action_mask = obs[0][:26] #["action_mask"]
         observation = obs[0][26:] #["observations"]
         action = 26
+        #print("prev_actions: ", prev_action_batch)
 
         admissible_actions = [i for i, mask in enumerate(action_mask) if mask == 1]
         #check wether card still has to be taken from discard pile or draw pile
@@ -220,7 +216,7 @@ class PreProgrammedPolicy(Policy):
                         elif max_card_value < j - 2:
                             max_card_value = j-2
                             imax = i
-            #print(masked_cards)
+            #print("hidden cards:",masked_cards)
 
             #1st case hand card value is lower equal than 3 (if card was taken from discard this branch will be taken for 100%)
             #place card on position with max_card_value
@@ -264,7 +260,7 @@ class RandomPolicy(Policy):
         **kwargs,
 
     ):
-
+        
         action_mask = obs[0][:26] #["action_mask"]
         observation = obs[0][26:] #["observations"]
 
@@ -290,16 +286,15 @@ skyjo_config = {
     "reward_refunded": 10,
     "final_reward": 100,
     "score_per_unknown": 5.0,
-    "action_reward_decay": 0.2,
-    "final_reward_offset": 150.0,
-    "old_reward": False,
+    "action_reward_decay": 1.0,
+    "old_reward": True,
     "render_mode": "human",
 }
 
 model_config = {
     "custom_model": TorchActionMaskModel,
     # Add the following keys:
-    "fcnet_hiddens": [2048, 2048, 1024, 512],
+    "fcnet_hiddens": [1024, 1024, 1024, 512, 512],
     "fcnet_activation": "relu",
 }
 
@@ -337,7 +332,7 @@ config_pre_train = (
     .callbacks(RewardDecay_Callback)
     #.callbacks(RewardDecayCallback)
     .env_runners(num_env_runners=1)
-    .rollouts(num_rollout_workers=1, num_envs_per_worker=1)
+    .rollouts(num_rollout_workers=6, num_envs_per_worker=1)
     .resources(num_gpus=1)
     .multi_agent(
         policies={
@@ -358,6 +353,7 @@ config_pre_train = (
     #     lr = ,
     # )
 )
+#config_pre_train["simple_optimizer"]=True
 
 config = (
     PPOConfig()
@@ -365,14 +361,13 @@ config = (
     .environment("skyjo", env_config=skyjo_config)
     .framework('torch')
     .callbacks(functools.partial(
-            SkyjoLogging_and_SelfPlayCallbacks,
-            win_rate_threshold=0.8,
-            action_reward_reduction=0.2,
+        SkyjoLogging_and_SelfPlayCallbacks,
+        win_rate_threshold=0.75,
         )
     )
     #.callbacks(RewardDecayCallback)
-    .env_runners(num_env_runners=5)
-    .rollouts(num_rollout_workers=5, num_envs_per_worker=2)
+    .env_runners(num_env_runners=1)
+    .rollouts(num_rollout_workers=1, num_envs_per_worker=10)
     .resources(num_gpus=1)
     .multi_agent(
         policies={
@@ -389,13 +384,16 @@ config = (
         enable_rl_module_and_learner=False,
         # enable_env_runner_and_connector_v2=True,
     )
-    .learners(num_gpus_per_learner=1)
     # .training()
     #     lr = ,
     # )
 )
 
+#Config for pre training
 algo = config_pre_train.build()
+
+#Load Pre-training and continue: adapt name of loaded checkpoint and
+#algo = config.build()
 
 def convert_to_serializable(obj):
     """Convert non-serializable objects to serializable types."""
@@ -410,27 +408,37 @@ def convert_to_serializable(obj):
 
 # trained_models_<beta>_<beta>_<beta>_<callback>
 config = "_others_direct_old_rewards"
-model_save_dir = "v0_pre_trained_model" + config
+model_save_dir = "v0_pre_trained_PPO_" + config
 os.makedirs(model_save_dir, exist_ok=True)
-max_steps = 1e6
-max_iters = 10000
+max_steps = 1e2
+max_iters = 10
+
+#algo.restore("v0_pre_trained_model_others_direct_old_rewards/checkpoint_800")
 
 
-if not os.path.exists("logs4"):
-    os.mkdir("logs4")
+if not os.path.exists("logs0"):
+    os.mkdir("logs0")
 
 for iters in range(max_iters):
     result = algo.train()
 
     # Can be adjusted as needed
-    if iters % 1 == 0:
-        with open(f"logs4/result_iteration_{iters}.json", "w") as f:
+    if iters % 100 == 0:
+        with open(f"logs0/result_iteration_{iters}.json", "w") as f:
             json.dump(result, f, indent=4, default=convert_to_serializable)
 
-    if iters % 10 == 0:
+    if iters % 100 == 0:
         checkpoint_dir = model_save_dir + f"/checkpoint_{iters}"
-        os.makedirs(checkpoint_dir, exist_ok=True)
-        algo.save(checkpoint_dir)
+        print("checkpoint safed")
+        #os.makedirs(checkpoint_dir, exist_ok=True)
+        #algo.save(checkpoint_dir)
+
+        #---------------for pre-training------------------
+        policy_dir = checkpoint_dir+f"/main_policy"
+        os.makedirs(policy_dir, exist_ok=True)
+        policy_to_safe = algo.get_policy(policy_id = "main")
+        policy_to_safe.export_checkpoint(policy_dir)
+        #-------------------------------------------------
     if result["timesteps_total"] >= max_steps:
         print(f"training done, because max_steps {max_steps} {result['timesteps_total']} reached")
         break
@@ -438,45 +446,12 @@ else:
     print(f"training done, because max_iters {max_iters} reached")
 
 final_dir = model_save_dir + f"/final"
-os.makedirs(final_dir, exist_ok=True)
-algo.save(final_dir)
+#os.makedirs(final_dir, exist_ok=True)
+#algo.save(final_dir)
 
-#max number of policy updates (can take multiple timesteps per iteration and train on this mini-batch)
-#max_iterations = 100
-#max number of timesteps taken in game
-#max_timesteps = 10000
-#max number of policies in the league
-#max_league_size = 5
-#define stopping conditions for Self_play
-#Num_env_steps_samples_lifetime... max number of in game steps sampled
-#training_iteration... max num of updates to policy (max number of training steps)
-#"league_size"... min size of league (starts with size 3), therefore main is logged "league_size" -3 times
-# stop = {
-#     NUM_ENV_STEPS_SAMPLED_LIFETIME: max_timesteps,
-#     TRAINING_ITERATION: max_iterations,
-#     "league_size": max_league_size,
-# }
-
-# storage_path = os.path.join(os.getcwd(), "results")
-
-# tuner = tune.Tuner(
-#     trainable="PPO",
-#     param_space={**config.to_dict(), **param_space},
-#     run_config=train.RunConfig(
-#         stop=stop,
-#         storage_path=storage_path,
-#         checkpoint_config=train.CheckpointConfig(
-#                 checkpoint_frequency=1,
-#                 checkpoint_at_end=True,
-#             ),
-#     ),
-#     #tune_config=tune.TuneConfig(
-#             #num_samples=args.num_samples,
-#             #max_concurrent_trials=args.max_concurrent_trials,
-#             #scheduler=scheduler,
-#     #),
-# )
-# result = tuner.fit()
-
-#algo = config.build()
-#algo.train()
+#---------------for pre-training------------------
+policy_dir = final_dir+f"/main_policy"
+os.makedirs(policy_dir, exist_ok=True)
+policy_to_safe = algo.get_policy(policy_id = "main")
+policy_to_safe.export_checkpoint(policy_dir)
+#-------------------------------------------------

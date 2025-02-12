@@ -7,6 +7,7 @@ from environment.skyjo_game import SkyjoGame
 from ray.tune.registry import register_env
 from ray.rllib.env.wrappers.pettingzoo_env import PettingZooEnv
 from ray.rllib.algorithms.ppo import PPOConfig
+from ray.rllib.policy.policy import Policy
 
 from environment.skyjo_env import env as skyjo_env
 from ray.rllib.algorithms.callbacks import DefaultCallbacks
@@ -81,6 +82,7 @@ class RewardDecayCallback(DefaultCallbacks):
         algorithm.config.env_config["action_reward_decay"] = action_reward_decay
         logger.info(action_reward_decay)
 
+
 skyjo_config_old = {
     "num_players": 3,
     "score_penalty": 2.0,
@@ -111,7 +113,22 @@ obs_space = test_env.observation_space
 act_space = test_env.action_space
 
 def policy_mapping_fn(agent_id, _, **kwargs):
-    return "policy_" + str(agent_id) #int(agent_id.split("_")[-1])
+    if agent_id == 0:
+        return "main"
+    else:
+        return "policy_" + str(agent_id) #int(agent_id.split("_")[-1])
+
+
+
+#------Change Directory from which to load policies----------------
+model_save_dir_old =  "v3_trained_models_old_rewards_others_direct"  #"v0_pre_trained_PPO__others_direct_old_rewards"
+final_dir_old = model_save_dir_old + f"/final"
+
+#----------------------------------------------------------------
+#load only one policy - only needed for loading pre-trained policy
+dir_old_one_policy = final_dir_old + f"/policies/policy_0"   # f"/main_policy"
+pre_trained_policy = Policy.from_checkpoint(dir_old_one_policy)
+#-----------------------------------------------------------------
 
 config_old = (
     PPOConfig()
@@ -124,7 +141,7 @@ config_old = (
     .resources(num_gpus=0)
     .multi_agent(
         policies={
-            "policy_0": (None, obs_space[0], act_space[0], {"entropy_coeff":0}),
+            "main": (pre_trained_policy, obs_space[0], act_space[0], {"entropy_coeff":0}),
             "policy_1": (None, obs_space[1], act_space[1], {"entropy_coeff":0}),
             "policy_2": (None, obs_space[2], act_space[2], {"entropy_coeff":0})
         },
@@ -134,9 +151,13 @@ config_old = (
     .debugging(log_level="INFO")
 )
 
+#config_old["simple_optimizer"]=True
+
 algo_old = config_old.build()
-#model_save_dir_old = "v3_trained_models_old_rewards_0.03_0.03_0.03_false"
-#final_dir_old = model_save_dir_old + f"/checkpoint_100"
+
+#-----------------------------------------------------------------
+#include if loading any policy other than pre_trained
+
 #algo_old.restore(final_dir_old)
 
 def policy_two(obs):
