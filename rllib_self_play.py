@@ -84,7 +84,7 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
 
         
         #opponent_rew_2 = result[ENV_RUNNER_RESULTS]["hist_stats"].pop(f"policy_{self.playing_polices[2]}_reward")
-        main_rew = result[ENV_RUNNER_RESULTS]["hist_stats"].pop("policy_main_reward")
+        main_rew = result[ENV_RUNNER_RESULTS]["hist_stats"]["policy_main_reward"] #.pop("policy_main_reward")
         won = 0
         n_games = len(main_rew)
         for rew in main_rew:
@@ -240,6 +240,7 @@ config = (
         enable_rl_module_and_learner=False,
         # enable_env_runner_and_connector_v2=True,
     )
+    .learners(num_gpus_per_learner=1)
     # .training()
     #     lr = ,
     # )
