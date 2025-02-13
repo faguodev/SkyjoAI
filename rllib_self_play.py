@@ -88,12 +88,12 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
         #opponent_rew_2 = result[ENV_RUNNER_RESULTS]["hist_stats"].pop(f"policy_{self.playing_polices[2]}_reward")
         main_rew = result[ENV_RUNNER_RESULTS]["hist_stats"].pop("policy_main_reward")
         won = 0
-        n_games = len(main_rew)
-        for rew in main_rew:
-            if rew%1 != 0:
-                won += 1
+        #n_games = len(main_rew)
+        #for rew in main_rew:
+        #    if rew%1 != 0:
+        #        won += 1
 
-        win_rate = won/ len(main_rew)
+        #win_rate = won/ len(main_rew)
 
         # INFO: This only works with old rewards... 
         # For new rewards, one needs to figure out a better way to do this.
@@ -102,11 +102,11 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
         # of games. One would need to figure out a way to reconstruct who played
         # against whom.
 
-        #for r_main in main_rew:
-        #    if r_main == 100.0:
-        #        won += 1
+        for r_main in main_rew:
+            if r_main == 100.0:
+                won += 1
 
-        #win_rate = won / len(main_rew)
+        win_rate = won / len(main_rew)
 
         
         print(f"Iter={algorithm.iteration} win-rate={win_rate} -> ", end="")
@@ -178,6 +178,7 @@ class PreProgrammedPolicy(Policy):
         action_mask = obs[0][:26] #["action_mask"]
         observation = obs[0][26:] #["observations"]
         action = 26
+        #print("prev_actions: ", prev_action_batch)
 
         admissible_actions = [i for i, mask in enumerate(action_mask) if mask == 1]
         #check wether card still has to be taken from discard pile or draw pile
@@ -215,7 +216,7 @@ class PreProgrammedPolicy(Policy):
                         elif max_card_value < j - 2:
                             max_card_value = j-2
                             imax = i
-            #print(masked_cards)
+            #print("hidden cards:",masked_cards)
 
             #1st case hand card value is lower equal than 3 (if card was taken from discard this branch will be taken for 100%)
             #place card on position with max_card_value
@@ -286,7 +287,7 @@ skyjo_config = {
     "final_reward": 100,
     "score_per_unknown": 5.0,
     "action_reward_decay": 1.0,
-    "old_reward": False,
+    "old_reward": True,
     "render_mode": "human",
 }
 
@@ -297,11 +298,6 @@ model_config = {
     "fcnet_activation": "relu",
 }
 
-# param_space = {
-#     "lr": tune.grid_search([0.0001, 0.001, 0.01]),  # Learning rate options
-#     "model": tune.grid_search([{"custom_model": TorchActionMaskModel, "fcnet_activation": "relu"}, {"custom_model": TorchActionMaskModel, "fcnet_activation": "tanh"}])
-# }
-
 def env_creator(config):
     return PettingZooEnv(skyjo_env(**config))
 
@@ -310,9 +306,6 @@ register_env("skyjo", env_creator)
 test_env = env_creator(skyjo_config)
 obs_space = test_env.observation_space
 act_space = test_env.action_space
-
-#def policy_mapping_fn(agent_id, _, **kwargs):
-#return "policy_" + str(agent_id) #int(agent_id.split("_")[-1])
 
 #policy mapping for self_play: only one "main" policy is trained
 def policy_mapping_fn(agent_id, episode, worker, **kwargs):
@@ -323,36 +316,6 @@ def policy_mapping_fn(agent_id, episode, worker, **kwargs):
     else:
         return "policy_2"
 
-config_pre_train = (
-    PPOConfig()
-    .training(model=model_config, )
-    .environment("skyjo", env_config=skyjo_config)
-    .framework('torch')
-    .callbacks(RewardDecay_Callback)
-    #.callbacks(RewardDecayCallback)
-    .env_runners(num_env_runners=1)
-    .rollouts(num_rollout_workers=1, num_envs_per_worker=1)
-    .resources(num_gpus=1)
-    .multi_agent(
-        policies={
-            "main": (None, obs_space[0], act_space[0], {"entropy_coeff":0.03}),
-            "policy_1": (PreProgrammedPolicy, obs_space[1], act_space[1], {}),
-            "policy_2": (PreProgrammedPolicy, obs_space[2], act_space[2], {}),
-        },
-        policy_mapping_fn=policy_mapping_fn,#(lambda agent_id, *args, **kwargs: agent_id),
-        policies_to_train=["main"],
-    )
-    .evaluation(evaluation_num_env_runners=0)
-    .debugging(log_level="INFO")
-    .api_stack(
-        enable_rl_module_and_learner=False,
-        # enable_env_runner_and_connector_v2=True,
-    )
-    # .training()
-    #     lr = ,
-    # )
-)
-
 config = (
     PPOConfig()
     .training(model=model_config, )
@@ -360,7 +323,7 @@ config = (
     .framework('torch')
     .callbacks(functools.partial(
         SkyjoLogging_and_SelfPlayCallbacks,
-        win_rate_threshold=0.75,
+        win_rate_threshold=0.7,
         )
     )
     #.callbacks(RewardDecayCallback)
@@ -370,8 +333,8 @@ config = (
     .multi_agent(
         policies={
             "main": (None, obs_space[0], act_space[0], {"entropy_coeff":0.03}),
-            "policy_1": (None, obs_space[1], act_space[1], {"entropy_coeff":0.03}),
-            "policy_2": (None, obs_space[2], act_space[2], {"entropy_coeff":0.03}),
+            "policy_1": (PreProgrammedPolicy, obs_space[1], act_space[1], {"entropy_coeff":0.03}),
+            "policy_2": (PreProgrammedPolicy, obs_space[2], act_space[2], {"entropy_coeff":0.03}),
         },
         policy_mapping_fn=policy_mapping_fn,#(lambda agent_id, *args, **kwargs: agent_id),
         policies_to_train=["main"],
@@ -380,14 +343,12 @@ config = (
     .debugging(log_level="INFO")
     .api_stack(
         enable_rl_module_and_learner=False,
-        # enable_env_runner_and_connector_v2=True,
     )
-    # .training()
-    #     lr = ,
-    # )
 )
 
-algo = config_pre_train.build()
+#Load Pre-training and continue: adapt name of loaded checkpoint and
+
+algo = config.build()
 
 def convert_to_serializable(obj):
     """Convert non-serializable objects to serializable types."""
@@ -402,27 +363,30 @@ def convert_to_serializable(obj):
 
 # trained_models_<beta>_<beta>_<beta>_<callback>
 config = "_others_direct_old_rewards"
-model_save_dir = "v0_pre_trained_model" + config
+model_save_dir = "v5_1_self_play_PPO_" + config
 os.makedirs(model_save_dir, exist_ok=True)
-max_steps = 1e6
-max_iters = 10
+max_steps = 1e10
+max_iters = 10000
 
+#algo.restore("v0_pre_trained_model_others_direct_old_rewards/checkpoint_800")
 
-if not os.path.exists("logs0"):
-    os.mkdir("logs0")
+if not os.path.exists("logs5_1"):
+    os.mkdir("logs5_1")
 
 for iters in range(max_iters):
     result = algo.train()
 
     # Can be adjusted as needed
     if iters % 100 == 0:
-        with open(f"logs4/result_iteration_{iters}.json", "w") as f:
+        with open(f"logs5_1/result_iteration_{iters}.json", "w") as f:
             json.dump(result, f, indent=4, default=convert_to_serializable)
 
     if iters % 100 == 0:
         checkpoint_dir = model_save_dir + f"/checkpoint_{iters}"
+        print("checkpoint safed")
         os.makedirs(checkpoint_dir, exist_ok=True)
         algo.save(checkpoint_dir)
+
     if result["timesteps_total"] >= max_steps:
         print(f"training done, because max_steps {max_steps} {result['timesteps_total']} reached")
         break
