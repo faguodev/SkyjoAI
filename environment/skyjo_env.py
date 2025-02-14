@@ -8,7 +8,6 @@ from typing import TypedDict
 
 class RewardConfig(TypedDict, total=False):
     score_penalty: float
-    mean_reward: float
     reward_refunded: float
     final_reward: float
     score_per_unknown: float
@@ -20,7 +19,6 @@ class RewardConfig(TypedDict, total=False):
 def default_reward_config() -> RewardConfig:
     return {
         "score_penalty": 2.0, # Seems useless
-        "mean_reward": 1.0, # Seems useless
         "reward_refunded": 0.0,
         "final_reward": 100.0,
         "score_per_unknown": 5.0,
@@ -79,7 +77,6 @@ class SimpleSkyjoEnv(AECEnv):
         self.agent_selection = self._expected_agentname_and_action()[0]
 
         # Use reward parameters from the config
-        self.mean_reward = self.reward_config["mean_reward"]
         self.reward_refunded = self.reward_config["reward_refunded"]
         self.final_reward = self.reward_config["final_reward"]
         self.action_reward_decay = self.reward_config["action_reward_decay"]
