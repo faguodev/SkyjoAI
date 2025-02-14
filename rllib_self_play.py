@@ -10,7 +10,8 @@ from ray.tune.registry import register_env
 from callback_functions import (RewardDecay_Callback,
                                 SkyjoLogging_and_SelfPlayCallbacks)
 from custom_models.action_mask_model import TorchActionMaskModel
-from custom_models.fixed_policies import PreProgrammedPolicySimple, PreProgrammedPolicyOneHot
+from custom_models.fixed_policies import (PreProgrammedPolicyOneHot,
+                                          PreProgrammedPolicySimple)
 from environment.skyjo_env import env as skyjo_env
 
 logger = logging.getLogger(__name__)
@@ -70,12 +71,12 @@ config = (
     # )
     #.callbacks(RewardDecayCallback)
     .env_runners(num_env_runners=1)
-    .rollouts(num_rollout_workers=6, num_envs_per_worker=10)
+    .rollouts(num_rollout_workers=6)
     .resources(num_gpus=1)
     .multi_agent(
         policies={
             "main": (None, obs_space[0], act_space[0], {"entropy_coeff":0.03}),
-            "policy_1": (None, obs_space[1], act_space[1], {}),
+            "policy_1": (PreProgrammedPolicyOneHot, obs_space[1], act_space[1], {}),
         },
         policy_mapping_fn=policy_mapping_fn,
         policies_to_train=["main"],
