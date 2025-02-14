@@ -224,13 +224,15 @@ class SimpleSkyjoEnv(AECEnv):
             self.rewards[current_agent] = self.final_reward_offset - card_sum[current_agent]
         else:
             # simple delta-based reward
-            self.rewards[current_agent] = self.action_reward_decay * (score_before - score_after)
+            self.rewards[current_agent] = 0
             if curious:
                 self.rewards[current_agent] += self.curiosity_reward
+            self.rewards[current_agent] += (score_before - score_after)
+            self.rewards[current_agent] *= self.action_reward_decay
 
         # if the game is over, finalize
         if game_over:
-            #if self.old_reward:
+            
             self.rewards = self._convert_to_dict(
                 self._calc_final_rewards(**(self.table.get_game_metrics()))
             )
@@ -248,9 +250,6 @@ class SimpleSkyjoEnv(AECEnv):
                 # reward decay. Perhaps rounding other rewards can be a solution.
                 temp = max((self.rewards).values())
                 winners = [key for key in self.rewards if self.rewards[key] == temp]
-                if not self.old_reward:
-                    for w in winners:
-                        self.rewards[w] += 0.5
                 self.infos[agent_id]["winner_ids"] = winners
 
         if last_action:
