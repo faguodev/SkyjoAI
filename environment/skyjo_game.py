@@ -18,7 +18,11 @@ except ImportError:
 
 class SkyjoGame(object):
     def __init__(
-        self, num_players: int = 3, score_penalty=2, observe_other_player_indirect=False
+        self, 
+        num_players: int = 3, 
+        score_penalty=2, 
+        observe_other_player_indirect=False,
+        observation_mode="simple",
     ) -> None:
         """ """
         assert (
@@ -28,6 +32,7 @@ class SkyjoGame(object):
         # init objects
         self.num_players = num_players
         self.score_penalty = score_penalty
+        self.observation_mode = observation_mode
 
         # placeholders for unknown/refunded in the internal game logic:
         self.fill_masked_unknown_value = 15
@@ -41,18 +46,21 @@ class SkyjoGame(object):
         # one-hot parameters
         #   => for each card "slot", we produce 17 entries:
         #      [-2..12] => 15 values, plus 1 unknown, plus 1 refunded
-        self.one_hot_size = 17
+        if self.observation_mode == "simple":
+            self.one_hot_size = 1
+        elif self.observation_mode == "onehot":
+            self.one_hot_size = 17
 
         # observation of other players:
         self.observe_other_player_indirect = observe_other_player_indirect
 
         # >>> ADJUSTED OBSERVATION SHAPE <<<
         # The first 17 entries are still integer-based "global stats" (1 + 1 + 15).
-        # Then we add 2 single-card fields (top_discard + hand), each 17 dims => +34
+        # Then we add 2 single-card fields (top_discard + hand_card), each 1/17 dims => +2/34
         # Finally, for the player's cards:
-        #   - If indirect => only own 12 => 12*17 = 204
-        #   - If direct   => all players => num_players*12*17
-        #   => total = 17 + 34 + (12 or num_players*12)*17
+        #   - If indirect => only own 12 => 12*1/17 = 12/204
+        #   - If direct   => all players => num_players*12*1/17
+        #   => total = 17 + 2/34 + (12 or num_players*12)*1/17
         if observe_other_player_indirect:
             self.obs_shape = (17 + 2*self.one_hot_size + 12*self.one_hot_size,)
         else:
@@ -238,16 +246,32 @@ class SkyjoGame(object):
             dtype=self.card_dtype,
         )  # shape (17,)
 
-        # one-hot encode top_discard & hand_card => shape (17,) each
-        top_discard_oh = self._one_hot_card_value(top_discard)
-        hand_card_oh = self._one_hot_card_value(self.hand_card)
+        if self.observation_mode == "simple":
 
-        # one-hot encode player_obs => shape (Ncards * 17,)
-        #   Ncards = 12 if indirect else num_players*12 if direct
-        player_obs_oh = self._one_hot_encode_array(player_obs)
+            player_obs = [5 if x == 15 else x for x in player_obs]
 
-        # final observation -> concat everything
-        obs = np.concatenate([global_stats, top_discard_oh, hand_card_oh, player_obs_oh])
+            obs = np.array(
+                (
+                    [min(cards_sum.min(), 127)]  # (1,)
+                    + [n_hidden.min()]  # (1,)
+                    + stats_counts  # (15,)
+                    + [top_discard]  # (1,)
+                    + [self.hand_card]  # (1,)
+                    + player_obs  # (12,) or (num_players * 12,)
+                ),
+            )
+
+        elif self.observation_mode == "onehot":
+            # one-hot encode top_discard & hand_card => shape (17,) each
+            top_discard_oh = self._one_hot_card_value(top_discard)
+            hand_card_oh = self._one_hot_card_value(self.hand_card)
+
+            # one-hot encode player_obs => shape (Ncards * 17,)
+            #   Ncards = 12 if indirect else num_players*12 if direct
+            player_obs_oh = self._one_hot_encode_array(player_obs)
+
+            # final observation -> concat everything
+            obs = np.concatenate([global_stats, top_discard_oh, hand_card_oh, player_obs_oh])
 
         # verify shape
         assert obs.shape == self.obs_shape, (
@@ -371,7 +395,6 @@ class SkyjoGame(object):
         """
         cards = np.full_like(players_cards, fill_unknown)
         all_ids = np.roll(np.arange(players_cards.shape[0]), - player_id)
-        #print(f"all_ids with player_id{player_id}: ", all_ids)
         for i,pl in enumerate(all_ids):
             masked_revealed = players_masked[pl] != 2
             cards[i][masked_revealed] = players_cards[pl][masked_revealed]
@@ -435,9 +458,6 @@ class SkyjoGame(object):
                 self.players_cards, player_id, score_penalty=self.score_penalty
             )
             game_over = True
-
-        #print("In Game_class - player_cards: ", self.players_cards)
-        #print(f"hidden_cards of player {player_id} after acting:", [i for i, val in enumerate(self.players_masked[player_id]) if val == 2])
 
         return game_over, last_action
 
