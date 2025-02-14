@@ -72,7 +72,7 @@ config = (
     )
     #.callbacks(RewardDecayCallback)
     .env_runners(num_env_runners=5)
-    .rollouts(num_rollout_workers=5, num_envs_per_worker=2)
+    .rollouts(num_rollout_workers=5, num_envs_per_worker=1)
     .resources(num_gpus=1)
     .multi_agent(
         policies={
@@ -124,7 +124,6 @@ if not os.path.exists("logs/logs6"):
 for iters in range(max_iters):
     result = algo.train()
 
-    print(iters)
     # Can be adjusted as needed
     if iters % 1 == 0:
         with open(f"logs/logs6/result_iteration_{iters}.json", "w") as f:

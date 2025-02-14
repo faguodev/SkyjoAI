@@ -13,14 +13,14 @@ class RewardDecay_Callback(DefaultCallbacks):
 
 class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
 
-    def __init__(self, win_rate_threshold):
+    def __init__(self, win_rate_threshold, action_reward_reduction):
         super().__init__()
         # 0=RandomPolicy, 1=1st main policy snapshot,
         # 2=2nd main policy snapshot, etc..
         self.current_opponent = 0
         self.winning_policy = []
-
         self.win_rate_threshold = win_rate_threshold
+        self.action_reward_reduction = action_reward_reduction
 
     def on_episode_end(        
         self,
@@ -60,7 +60,7 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
 
         
         #opponent_rew_2 = result[ENV_RUNNER_RESULTS]["hist_stats"].pop(f"policy_{self.playing_polices[2]}_reward")
-        main_rew = result[ENV_RUNNER_RESULTS]["hist_stats"].pop("policy_main_reward")
+        main_rew = result[ENV_RUNNER_RESULTS]["hist_stats"]["policy_main_reward"] #.pop("policy_main_reward")
         won = 0
         #n_games = len(main_rew)
         #for rew in main_rew:
@@ -83,7 +83,11 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
         win_rate = won / len(main_rew)
 
         
-        print(f"Iter={algorithm.iteration} win-rate={win_rate} -> ", end="")
+        print(f"Iter={algorithm.iteration} win-rate={win_rate:3f}, reward_decay={algorithm.config.env_config['reward_config']['action_reward_decay']:3f} -> ", end="")
+
+        action_reward_reduction = max(0.01, algorithm.config.env_config['reward_config']["action_reward_decay"] * 0.98)
+        algorithm.config.env_config['reward_config']["action_reward_decay"] = action_reward_reduction
+
         # If win rate is good -> Snapshot current policy and play against
         # it next, keeping the snapshot fixed and only improving the "main"
         # policy.
@@ -126,6 +130,7 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
             # to all the remote workers as well.
             algorithm.env_runner_group.sync_weights()
 
+            algorithm.config.env_config['reward_config']['action_reward_decay'] = self.action_reward_reduction
         else:
             print("not good enough; will keep learning ...")
 
