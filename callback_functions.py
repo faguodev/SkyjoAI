@@ -32,8 +32,7 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
         the final card sum from the `info` dict for each agent
         and log it as a custom metric.
         """
-        
-        #win_id = 0
+
         for agent_id in episode.get_agents():
             info = episode.last_info_for(agent_id)
     
@@ -44,8 +43,7 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
                 metric_name = f"n_hidden_cards_{agent_id}"
                 episode.custom_metrics[metric_name] = info["n_hidden_cards"]
 
-                #episode.custom_metrics["winning_policy"].append([episode.policy_for(id) for id in info["winner_ids"]])
-                
+               
     def on_train_result(
         self,
         *,
@@ -54,20 +52,10 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
         result,
         **kwargs,
         ):
-
-        #for p_id in self.playing_polices:
-        #    print("Policies playing: ", p_id)
-
         
         #opponent_rew_2 = result[ENV_RUNNER_RESULTS]["hist_stats"].pop(f"policy_{self.playing_polices[2]}_reward")
         main_rew = result[ENV_RUNNER_RESULTS]["hist_stats"].pop("policy_main_reward")
         won = 0
-        #n_games = len(main_rew)
-        #for rew in main_rew:
-        #    if rew%1 != 0:
-        #        won += 1
-
-        #win_rate = won/ len(main_rew)
 
         # INFO: This only works with old rewards... 
         # For new rewards, one needs to figure out a better way to do this.
@@ -132,5 +120,4 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
         # +2 = main + random
         result["league_size"] = self.current_opponent + 3
 
-        #print(f"Matchups:\n{self._matching_stats}")
 
