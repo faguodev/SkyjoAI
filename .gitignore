@@ -1,5 +1,4 @@
 .idea/*
 *.pyc
-trained_models
-results/
-logs*/
+trained_models/*
+logs/*
