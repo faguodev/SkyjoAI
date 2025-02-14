@@ -3,19 +3,30 @@ import numpy as np
 from gymnasium import spaces
 from pettingzoo import AECEnv
 from pettingzoo.utils import wrappers
-
-# IMPORTANT: import the updated SkyjoGame from your local file
 from environment.skyjo_game import SkyjoGame
+from typing import TypedDict
 
-DEFAULT_CONFIG = {
-    "num_players": 3,
-    "score_penalty": 2.0,
-    "observe_other_player_indirect": True,
-    "mean_reward": 1.0,
-    "reward_refunded": 0.001,
-    "render_mode": "human"
-}
+class RewardConfig(TypedDict, total=False):
+    score_penalty: float
+    reward_refunded: float
+    final_reward: float
+    score_per_unknown: float
+    action_reward_decay: float
+    final_reward_offset: float
+    curiosity_reward: float
+    old_reward: bool
 
+def default_reward_config() -> RewardConfig:
+    return {
+        "score_penalty": 2.0, # Seems useless
+        "reward_refunded": 0.0,
+        "final_reward": 100.0,
+        "score_per_unknown": 5.0,
+        "action_reward_decay": 1.0,
+        "final_reward_offset": 0.0,
+        "curiosity_reward": 4.0,
+        "old_reward": False,
+    }
 
 def env(**kwargs):
     """wrap SkyJoEnv in PettingZoo wrappers"""
@@ -25,7 +36,6 @@ def env(**kwargs):
     _env = wrappers.AssertOutOfBoundsWrapper(_env)
     _env = wrappers.OrderEnforcingWrapper(_env)
     return _env
-
 
 class SimpleSkyjoEnv(AECEnv):
     metadata = {
@@ -38,16 +48,10 @@ class SimpleSkyjoEnv(AECEnv):
     def __init__(
         self,
         num_players=2,
-        score_penalty: float = 2.0,
         observe_other_player_indirect: bool = False,
-        mean_reward: float = 1.0,
-        reward_refunded: float = 0.0,
-        final_reward: float = 100.0,
-        score_per_unknown: float = 5.0,
-        action_reward_decay: float = 1.0,
-        final_reward_offset: float = 0.0,
-        old_reward: bool = False,
-        render_mode=None,
+        observation_mode: str = "simple",
+        reward_config: RewardConfig = None,
+        render_mode=None
     ):
         """
         PettingZoo AEC Env for SkyJo
@@ -55,18 +59,15 @@ class SimpleSkyjoEnv(AECEnv):
         super().__init__()
 
         self.num_players = num_players
-        self.mean_reward = mean_reward
-        self.reward_refunded = reward_refunded
-        self.final_reward = final_reward
-        self.action_reward_decay = action_reward_decay
-        self.final_reward_offset = final_reward_offset
-        self.score_per_unknown = score_per_unknown
-        self.old_reward = old_reward
+        self.observation_mode = observation_mode
+        self.reward_config: RewardConfig = {**default_reward_config(), **(reward_config or {})}
+
 
         self.table = SkyjoGame(
             num_players=num_players,
-            score_penalty=score_penalty,
+            score_penalty=self.reward_config["score_penalty"],
             observe_other_player_indirect=observe_other_player_indirect,
+            observation_mode=self.observation_mode,
         )
 
         self.render_mode = render_mode
@@ -74,6 +75,15 @@ class SimpleSkyjoEnv(AECEnv):
         self.possible_agents = self.agents[:]
         self.rewards = {agent: 0 for agent in self.agents}
         self.agent_selection = self._expected_agentname_and_action()[0]
+
+        # Use reward parameters from the config
+        self.reward_refunded = self.reward_config["reward_refunded"]
+        self.final_reward = self.reward_config["final_reward"]
+        self.action_reward_decay = self.reward_config["action_reward_decay"]
+        self.final_reward_offset = self.reward_config["final_reward_offset"]
+        self.score_per_unknown = self.reward_config["score_per_unknown"]
+        self.old_reward = self.reward_config["old_reward"]
+        self.curiosity_reward = self.reward_config["curiosity_reward"]
 
         # termination/truncation
         self.terminations = self._convert_to_dict([False] * self.num_agents)
@@ -113,7 +123,6 @@ class SimpleSkyjoEnv(AECEnv):
 
     def update_action_reward_decay(self, action_reward_decay):
         self.action_reward_decay = action_reward_decay
-        #print(action_reward_decay)
 
     def observation_space(self, agent):
         """
@@ -196,6 +205,10 @@ class SimpleSkyjoEnv(AECEnv):
         if self.terminations[current_agent]:
             return self._was_dead_step(None)
 
+        curious = False
+        if action >= 12 and action < 24:
+            curious = True
+
         # reward shaping: score before
         n_hidden, card_sum = self.table.collect_hidden_card_sums()
         score_before = card_sum[current_agent] + self.score_per_unknown * n_hidden[current_agent]
@@ -206,22 +219,18 @@ class SimpleSkyjoEnv(AECEnv):
         n_hidden, card_sum = self.table.collect_hidden_card_sums()
         score_after = card_sum[current_agent] + self.score_per_unknown * n_hidden[current_agent]
 
-        if not self.old_reward:
-            # if last_action:
-            #     # player revealed all => we give final reward offset
-            #     self.rewards[current_agent] = self.final_reward_offset - card_sum[current_agent]
-            #
-            # else:
-                # simple delta-based reward
-                self.rewards[current_agent] = self.action_reward_decay * (score_before - score_after)
+        if last_action:
+            # player revealed all => we give final reward offset
+            self.rewards[current_agent] = self.final_reward_offset - card_sum[current_agent]
+        else:
+            # simple delta-based reward
+            self.rewards[current_agent] = self.action_reward_decay * (score_before - score_after)
+            if curious:
+                self.rewards[current_agent] += self.curiosity_reward
 
         # if the game is over, finalize
         if game_over:
-            #print("Reward_decay = ", self.action_reward_decay)
-            # if self.old_reward:
-            #     self.rewards = self._convert_to_dict(
-            #         self._calc_final_rewards(**(self.table.get_game_metrics()))
-            #     )
+            #if self.old_reward:
             self.rewards = self._convert_to_dict(
                 self._calc_final_rewards(**(self.table.get_game_metrics()))
             )
@@ -234,6 +243,9 @@ class SimpleSkyjoEnv(AECEnv):
                 self.infos[agent_id]["final_card_sum"] = card_sums[idx]
                 self.infos[agent_id]["n_hidden_cards"] = n_hidden[idx]
             
+                # TODO: If we first only pretrain and then only self-play then this might not be necessary.
+                # Otherwise, we still might need to adapt this due to floating point values introduced by
+                # reward decay. Perhaps rounding other rewards can be a solution.
                 temp = max((self.rewards).values())
                 winners = [key for key in self.rewards if self.rewards[key] == temp]
                 if not self.old_reward:
