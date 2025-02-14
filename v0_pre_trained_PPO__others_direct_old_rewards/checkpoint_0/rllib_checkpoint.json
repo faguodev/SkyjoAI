@@ -1,1 +1,0 @@
-{"type": "Algorithm", "checkpoint_version": "1.1", "format": "cloudpickle", "state_file": "v0_pre_trained_PPO__others_direct_old_rewards/checkpoint_0/algorithm_state.pkl", "policy_ids": ["policy_2", "policy_1", "main"], "ray_version": "2.37.0", "ray_commit": "1b620f244c4fb67d80661046091573fb6eefecb6"}
