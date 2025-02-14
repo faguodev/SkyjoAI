@@ -10,6 +10,12 @@ import logging
 import numpy as np
 from stable_baselines3 import PPO
 
+# This file is used to allow playing against the model trained in the
+# github repository https://github.com/Guillaume-Barthe/Skyjo. They used
+# only single agent training in a simplified environment.
+
+
+
 
 ##############################
 # GLOBAL STATE: TURN COUNTER
