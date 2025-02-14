@@ -13,7 +13,7 @@ from environment.skyjo_env import env as skyjo_env
 from ray.rllib.algorithms.callbacks import DefaultCallbacks
 import logging
 
-from models.action_mask_model import TorchActionMaskModel
+from custom_models.action_mask_model import TorchActionMaskModel
 
 def random_admissible_policy(obs):
     observation = obs["observations"]

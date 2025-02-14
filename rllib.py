@@ -9,7 +9,7 @@ import numpy as np
 import os
 import json
 
-from models.action_mask_model import TorchActionMaskModel
+from custom_models.action_mask_model import TorchActionMaskModel
 
 
 logger = logging.getLogger(__name__)
