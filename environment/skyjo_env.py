@@ -219,17 +219,19 @@ class SimpleSkyjoEnv(AECEnv):
         n_hidden, card_sum = self.table.collect_hidden_card_sums()
         score_after = card_sum[current_agent] + self.score_per_unknown * n_hidden[current_agent]
 
-        if last_action:
+        if not game_over:
             # player revealed all => we give final reward offset
-            self.rewards[current_agent] = self.final_reward_offset - card_sum[current_agent]
-        else:
+        #     self.rewards[current_agent] = self.final_reward_offset - card_sum[current_agent]
+        # else:
             # simple delta-based reward
+            if score_before - score_after <= 0:
+                self.infos[current_agent]["undesirable_action"] += 1
             self.rewards[current_agent] = self.action_reward_decay * (score_before - score_after)
             if curious:
                 self.rewards[current_agent] += self.curiosity_reward
 
         # if the game is over, finalize
-        if game_over:
+        else:
             #if self.old_reward:
             self.rewards = self._convert_to_dict(
                 self._calc_final_rewards(**(self.table.get_game_metrics()))
@@ -246,12 +248,12 @@ class SimpleSkyjoEnv(AECEnv):
                 # TODO: If we first only pretrain and then only self-play then this might not be necessary.
                 # Otherwise, we still might need to adapt this due to floating point values introduced by
                 # reward decay. Perhaps rounding other rewards can be a solution.
-                temp = max((self.rewards).values())
-                winners = [key for key in self.rewards if self.rewards[key] == temp]
-                if not self.old_reward:
-                    for w in winners:
-                        self.rewards[w] += 0.5
-                self.infos[agent_id]["winner_ids"] = winners
+            max_reward = max(card_sums.values())
+            winners = [agent_id for agent_id in self.rewards if self.rewards[agent_id] == max_reward]
+                # if not self.old_reward:
+                #     for w in winners:
+                #         self.rewards[w] += 0.5
+            self.infos[0]["winner_ids"] = winners
 
         if last_action:
             self.truncations[current_agent] = True
@@ -274,7 +276,7 @@ class SimpleSkyjoEnv(AECEnv):
         self._cumulative_rewards = self._convert_to_dict([0] * self.num_agents)
         self.terminations = self._convert_to_dict([False] * self.num_agents)
         self.truncations = self._convert_to_dict([False] * self.num_agents)
-        self.infos = {i: {} for i in self.agents}
+        self.infos = {i: {"undesirable_action": 0} for i in self.agents}
 
         if seed is not None:
             self.table.set_seed(seed)

@@ -13,7 +13,7 @@ class RewardDecay_Callback(DefaultCallbacks):
 
 class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
 
-    def __init__(self, win_rate_threshold, action_reward_reduction):
+    def __init__(self, main_policy_id, win_rate_threshold, action_reward_reduction, action_reward_decay):
         super().__init__()
         # 0=RandomPolicy, 1=1st main policy snapshot,
         # 2=2nd main policy snapshot, etc..
@@ -21,6 +21,9 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
         self.winning_policy = []
         self.win_rate_threshold = win_rate_threshold
         self.action_reward_reduction = action_reward_reduction
+        self.action_reward_decay = action_reward_decay
+        self.n_main_policy_win = 0
+        self.main_policy_id = main_policy_id
 
     def on_episode_end(        
         self,
@@ -36,13 +39,23 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
         #win_id = 0
         for agent_id in episode.get_agents():
             info = episode.last_info_for(agent_id)
-    
-            if info is not None and "final_card_sum" in info:
+            print(info)
+            print("Collecting info")
+            if info is None:
+                continue
+            if "final_card_sum" in info:
                 metric_name = f"final_card_sum_{agent_id}"
                 episode.custom_metrics[metric_name] = info["final_card_sum"]
-            if info is not None and "n_hidden_cards" in info:
+            if "n_hidden_cards" in info:
                 metric_name = f"n_hidden_cards_{agent_id}"
                 episode.custom_metrics[metric_name] = info["n_hidden_cards"]
+            if "undesirable_action" in info:
+                metric_name = f"undesirable_action_{agent_id}"
+                episode.custom_metrics[metric_name] = info["undesirable_action"]
+            # winner_ids is only stored in the first agent's infos dict
+            if "winner_ids" in info:
+                if self.main_policy_id in info["winner_ids"]:
+                    self.n_main_policy_win += 1
 
                 #episode.custom_metrics["winning_policy"].append([episode.policy_for(id) for id in info["winner_ids"]])
                 
@@ -61,13 +74,6 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
         
         #opponent_rew_2 = result[ENV_RUNNER_RESULTS]["hist_stats"].pop(f"policy_{self.playing_polices[2]}_reward")
         main_rew = result[ENV_RUNNER_RESULTS]["hist_stats"]["policy_main_reward"] #.pop("policy_main_reward")
-        won = 0
-        #n_games = len(main_rew)
-        #for rew in main_rew:
-        #    if rew%1 != 0:
-        #        won += 1
-
-        #win_rate = won/ len(main_rew)
 
         # INFO: This only works with old rewards... 
         # For new rewards, one needs to figure out a better way to do this.
@@ -76,16 +82,11 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
         # of games. One would need to figure out a way to reconstruct who played
         # against whom.
 
-        for r_main in main_rew:
-            if r_main == 100.0:
-                won += 1
-
-        win_rate = won / len(main_rew)
-
+        win_rate = self.n_main_policy_win / len(main_rew)
         
         print(f"Iter={algorithm.iteration} win-rate={win_rate:3f}, reward_decay={algorithm.config.env_config['reward_config']['action_reward_decay']:3f} -> ", end="")
 
-        action_reward_reduction = max(0.01, algorithm.config.env_config['reward_config']["action_reward_decay"] * 0.98)
+        action_reward_reduction = max(0.01, algorithm.config.env_config['reward_config']["action_reward_decay"] * self.action_reward_decay)
         algorithm.config.env_config['reward_config']["action_reward_decay"] = action_reward_reduction
 
         # If win rate is good -> Snapshot current policy and play against
@@ -136,6 +137,7 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
 
         # +2 = main + random
         result["league_size"] = self.current_opponent + 3
+        self.n_main_policy_win = 0
 
         #print(f"Matchups:\n{self._matching_stats}")
 
