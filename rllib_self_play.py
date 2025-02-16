@@ -1,3 +1,4 @@
+import functools
 import json
 import logging
 import os
@@ -11,33 +12,34 @@ from callback_functions import (RewardDecay_Callback,
                                 SkyjoLogging_and_SelfPlayCallbacks)
 from custom_models.action_mask_model import TorchActionMaskModel
 from custom_models.fixed_policies import (PreProgrammedPolicyOneHot,
-                                          PreProgrammedPolicySimple)
+                                          PreProgrammedPolicySimple,
+                                          RandomPolicy)
 from environment.skyjo_env import env as skyjo_env
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 skyjo_config = {
-    "num_players": 2,
+    "num_players": 3,
     "reward_config": {
         "score_penalty": 2.0, # Seems useless
         "reward_refunded": 10,
         "final_reward": 100,
         "score_per_unknown": 5.0,
-        "action_reward_decay": 1.0,
+        "action_reward_reduction": 5.0, # Search
         "old_reward": False,
-        "curiosity_reward": 4.0,
+        "curiosity_reward": 0.0, # Search
     },
-    "observe_other_player_indirect": True,
+    "observe_other_player_indirect": False, # 1.Search
     "render_mode": "human",
-    "observation_mode": "onehot",
+    "observation_mode": "onehot", # 1.Search
 }
 
 model_config = {
     "custom_model": TorchActionMaskModel,
-    'vf_share_layers': True,
+    'vf_share_layers': False, # 2. Search
     # Add the following keys:
-    "fcnet_hiddens": [2048, 2048, 1024, 512],
+    "fcnet_hiddens": [2048, 2048, 2048, 1024, 512],
     "fcnet_activation": "relu",
 }
 
@@ -63,19 +65,23 @@ config = (
     .training(model=model_config, )
     .environment("skyjo", env_config=skyjo_config)
     .framework('torch')
-    # .callbacks(functools.partial(
-    #     SkyjoLogging_and_SelfPlayCallbacks,
-    #     win_rate_threshold=0.7,
-    #     )
-    # )
+    .callbacks(functools.partial(
+            SkyjoLogging_and_SelfPlayCallbacks,
+            main_policy_id=0,
+            win_rate_threshold=0.8,
+            action_reward_reduction=1.0, # Search
+            action_reward_decay=0.99 # Search
+        )
+    )
     #.callbacks(RewardDecayCallback)
-    .env_runners(num_env_runners=1)
-    .rollouts(num_rollout_workers=6)
+    .env_runners(num_env_runners=5)
+    .rollouts(num_rollout_workers=5, num_envs_per_worker=1)
     .resources(num_gpus=1)
     .multi_agent(
         policies={
-            "main": (None, obs_space[0], act_space[0], {"entropy_coeff":0.03}),
-            "policy_1": (PreProgrammedPolicyOneHot, obs_space[1], act_space[1], {}),
+            "main": (None, obs_space[0], act_space[0], {"entropy_coeff":0.03}), # Search 3. entropy & 4. LR
+            "policy_1": (PreProgrammedPolicyOneHot, obs_space[1], act_space[1], {"entropy_coeff":0.03}),
+            "policy_2": (PreProgrammedPolicyOneHot, obs_space[2], act_space[2], {"entropy_coeff":0.03}),
         },
         policy_mapping_fn=policy_mapping_fn,
         policies_to_train=["main"],
@@ -106,27 +112,27 @@ def convert_to_serializable(obj):
 #endregion
 
 config = "_others_direct"
-model_save_dir = "trained_models/v6_trained_models_new_rewards" + config
+model_save_dir = "trained_models/v12_trained_models_new_rewards" + config
 os.makedirs(model_save_dir, exist_ok=True)
 max_steps = 1e10
 max_iters = 100000
 
+#algo.restore("v0_pre_trained_model_others_direct_old_rewards/checkpoint_800")
 
 #region Training
 
-if not os.path.exists("logs/logs6"):
-    os.mkdir("logs/logs6")
+if not os.path.exists("logs/logs12"):
+    os.mkdir("logs/logs12")
 
 for iters in range(max_iters):
     result = algo.train()
 
-    print(iters)
     # Can be adjusted as needed
-    if iters % 10 == 0:
-        with open(f"logs/logs6/result_iteration_{iters}.json", "w") as f:
+    if iters % 1 == 0:
+        with open(f"logs/logs12/result_iteration_{iters}.json", "w") as f:
             json.dump(result, f, indent=4, default=convert_to_serializable)
 
-    if iters % 100 == 0:
+    if iters % 10 == 0:
         checkpoint_dir = model_save_dir + f"/checkpoint_{iters}"
         os.makedirs(checkpoint_dir, exist_ok=True)
         algo.save(checkpoint_dir)

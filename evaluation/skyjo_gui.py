@@ -94,10 +94,26 @@ skyjo_config_old = {
     "render_mode": "human",
 }
 
+skyjo_config = {
+    "num_players": 3,
+    "reward_config": {
+        "score_penalty": 2.0, # Seems useless
+        "reward_refunded": 10,
+        "final_reward": 100,
+        "score_per_unknown": 5.0,
+        "action_reward_reduction": 2.0,
+        "old_reward": False,
+        "curiosity_reward": 0.0,
+    },
+    "observe_other_player_indirect": False,
+    "render_mode": "human",
+    "observation_mode": "onehot",
+}
+
 model_config = {
     "custom_model": TorchActionMaskModel,
     # Add the following keys:
-    "fcnet_hiddens": [1024, 1024, 1024, 512, 512],
+    "fcnet_hiddens": [2048, 2048, 1024, 512],
     "fcnet_activation": "relu",
 }
 
@@ -106,7 +122,7 @@ def env_creator(config):
 
 register_env("skyjo", env_creator)
 
-test_env = env_creator(skyjo_config_old)
+test_env = env_creator(skyjo_config)
 obs_space = test_env.observation_space
 act_space = test_env.action_space
 
@@ -116,7 +132,7 @@ def policy_mapping_fn(agent_id, _, **kwargs):
 config_old = (
     PPOConfig()
     .training(model=model_config, )
-    .environment("skyjo", env_config=skyjo_config_old)
+    .environment("skyjo", env_config=skyjo_config)
     .framework('torch')
     .callbacks(RewardDecayCallback)
     .env_runners(num_env_runners=1)
@@ -135,9 +151,9 @@ config_old = (
 )
 
 algo_old = config_old.build()
-#model_save_dir_old = "v3_trained_models_old_rewards_0.03_0.03_0.03_false"
-#final_dir_old = model_save_dir_old + f"/checkpoint_100"
-#algo_old.restore(final_dir_old)
+model_save_dir_old = "/home/henry/Documents/SharedDocuments/Uni/TU/3.Semester/AdvRL/SkyjoAI/trained_models/v10_trained_models_new_rewards_others_direct"
+final_dir_old = model_save_dir_old + f"/checkpoint_650"
+algo_old.restore(final_dir_old)
 
 def policy_two(obs):
     policy = algo_old.get_policy(policy_id=policy_mapping_fn(0, None))
