@@ -33,7 +33,7 @@ defaults = {
 
 # Search spaces
 tuning_stages = [
-    {"observation_mode": ["onehot", "simple"], "observe_other_player_indirect": [True, False]},
+    {"observation_mode": ["simple", "onehot"], "observe_other_player_indirect": [True, False]},
     #{"vf_share_layers": [True, False]},
     {"entropy_coeff": [0.01, 0.03]},
     {"learning_rate": [1e-4, 1e-3, 1e-2]},

@@ -104,7 +104,7 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
             result[ENV_RUNNER_RESULTS]["hist_stats"]["win_rate"] = []
         result[ENV_RUNNER_RESULTS]["hist_stats"]["win_rate"].append(win_rate)
 
-        print(f"Iter={algorithm.iteration} win-rate={win_rate:3f}, reward_decay={algorithm.config.env_config['reward_config']['action_reward_reduction']:3f} -> ", end="")
+        print(f"Iter={algorithm.iteration} win-rate={win_rate:3f}, reward_reduction={algorithm.config.env_config['reward_config']['action_reward_reduction']:3f} -> ", end="")
 
         action_reward_reduction = max(0.01, algorithm.config.env_config['reward_config']["action_reward_reduction"] * self.action_reward_decay)
         algorithm.config.env_config['reward_config']["action_reward_reduction"] = action_reward_reduction
