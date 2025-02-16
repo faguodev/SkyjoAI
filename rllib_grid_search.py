@@ -37,7 +37,8 @@ tuning_stages = [
     #{"vf_share_layers": [True, False]},
     {"entropy_coeff": [0.01, 0.03]},
     {"learning_rate": [1e-4, 1e-3, 1e-2]},
-    {"curiosity_reward": [0.0, 5], "action_reward_reduction": [0.5, 1, 5], "action_reward_decay": [0.95, 0.995, 1]}
+    {"curiosity_reward": [0.0, 5]},
+    {"action_reward_reduction": [1, 5], "action_reward_decay": [0.95, 0.995, 1]}
 ]
 
 def train_model(
@@ -147,7 +148,7 @@ def train_model(
 
     model_save_dir = f"trained_models/grid_search/{param_string}"
     os.makedirs(model_save_dir, exist_ok=True)
-    max_iters = 3000
+    max_iters = 2000
 
     #region Training
     
@@ -178,7 +179,7 @@ def train_model(
             with open(f"{logs_save_dir}/result_iteration_{iters}.json", "w") as f:
                 json.dump(result, f, indent=4, default=convert_to_serializable)
 
-        if iters % 10 == 0:
+        if iters % 250 == 0:
             checkpoint_dir = f"{model_save_dir}/checkpoint_{iters}"
             os.makedirs(checkpoint_dir, exist_ok=True)
             algo.save(checkpoint_dir)
