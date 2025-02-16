@@ -26,18 +26,18 @@ skyjo_config = {
         "reward_refunded": 10,
         "final_reward": 100,
         "score_per_unknown": 5.0,
-        "action_reward_reduction": 5.0,
+        "action_reward_reduction": 5.0, # Search
         "old_reward": False,
-        "curiosity_reward": 0.0,
+        "curiosity_reward": 0.0, # Search
     },
-    "observe_other_player_indirect": False,
+    "observe_other_player_indirect": False, # 1.Search
     "render_mode": "human",
-    "observation_mode": "onehot",
+    "observation_mode": "onehot", # 1.Search
 }
 
 model_config = {
     "custom_model": TorchActionMaskModel,
-    'vf_share_layers': True,
+    'vf_share_layers': False, # 2. Search
     # Add the following keys:
     "fcnet_hiddens": [2048, 2048, 2048, 1024, 512],
     "fcnet_activation": "relu",
@@ -69,8 +69,8 @@ config = (
             SkyjoLogging_and_SelfPlayCallbacks,
             main_policy_id=0,
             win_rate_threshold=0.8,
-            action_reward_reduction=1.0,
-            action_reward_decay=0.99
+            action_reward_reduction=1.0, # Search
+            action_reward_decay=0.99 # Search
         )
     )
     #.callbacks(RewardDecayCallback)
@@ -79,7 +79,7 @@ config = (
     .resources(num_gpus=1)
     .multi_agent(
         policies={
-            "main": (None, obs_space[0], act_space[0], {"entropy_coeff":0.03}),
+            "main": (None, obs_space[0], act_space[0], {"entropy_coeff":0.03}), # Search 3. entropy & 4. LR
             "policy_1": (PreProgrammedPolicyOneHot, obs_space[1], act_space[1], {"entropy_coeff":0.03}),
             "policy_2": (PreProgrammedPolicyOneHot, obs_space[2], act_space[2], {"entropy_coeff":0.03}),
         },
@@ -112,7 +112,7 @@ def convert_to_serializable(obj):
 #endregion
 
 config = "_others_direct"
-model_save_dir = "trained_models/v11_trained_models_new_rewards" + config
+model_save_dir = "trained_models/v12_trained_models_new_rewards" + config
 os.makedirs(model_save_dir, exist_ok=True)
 max_steps = 1e10
 max_iters = 100000
@@ -121,15 +121,15 @@ max_iters = 100000
 
 #region Training
 
-if not os.path.exists("logs/logs11"):
-    os.mkdir("logs/logs11")
+if not os.path.exists("logs/logs12"):
+    os.mkdir("logs/logs12")
 
 for iters in range(max_iters):
     result = algo.train()
 
     # Can be adjusted as needed
     if iters % 1 == 0:
-        with open(f"logs/logs11/result_iteration_{iters}.json", "w") as f:
+        with open(f"logs/logs12/result_iteration_{iters}.json", "w") as f:
             json.dump(result, f, indent=4, default=convert_to_serializable)
 
     if iters % 10 == 0:
