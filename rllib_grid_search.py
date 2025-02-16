@@ -28,7 +28,7 @@ defaults = {
     "action_reward_reduction": 1,
     "action_reward_decay": 0.995,
     "entropy_coeff": 0.01,
-    "learning_rate": 1
+    "learning_rate": 1e-4
 }
 
 # Search spaces
