@@ -40,11 +40,11 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
             info = episode.last_info_for(agent_id)
             if info is None:
                 continue
-            if "final_card_sum" in info:
-                metric_name = f"final_card_sum_{agent_id}"
+            if "final_sum_of_revealed_cards" in info:
+                metric_name = f"final_sum_of_revealed_cards_{agent_id}"
                 if metric_name not in episode.hist_data:
                     episode.hist_data[metric_name] = []
-                episode.hist_data[metric_name].append(info["final_card_sum"])
+                episode.hist_data[metric_name].append(info["final_sum_of_revealed_cards"])
             if "n_hidden_cards" in info:
                 metric_name = f"n_hidden_cards_{agent_id}"
                 if metric_name not in episode.hist_data:
@@ -61,11 +61,11 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
                 if metric_name not in episode.hist_data:
                     episode.hist_data[metric_name] = []
                 episode.hist_data[metric_name].append(info[metric_name])
-            if "final_scores" in info:
-                metric_name = "final_scores"
+            if "final_score" in info:
+                metric_name = f"final_score_{agent_id}"
                 if metric_name not in episode.hist_data:
                     episode.hist_data[metric_name] = []
-                episode.hist_data[metric_name].append(info[metric_name])
+                episode.hist_data[metric_name].append(info["final_score"])
 
                 #episode.custom_metrics["winning_policy"].append([episode.policy_for(id) for id in info["winner_ids"]])
                 

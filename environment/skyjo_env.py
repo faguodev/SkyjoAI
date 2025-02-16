@@ -244,7 +244,7 @@ class SimpleSkyjoEnv(AECEnv):
             # --- NEW PART: store final card sums in info dict for each agent ---
             n_hidden, card_sums = self.table.collect_hidden_card_sums()
             for idx, agent_id in enumerate(self.agents):
-                self.infos[agent_id]["final_card_sum"] = card_sums[idx]
+                self.infos[agent_id]["final_sum_of_revealed_cards"] = card_sums[idx]
                 self.infos[agent_id]["n_hidden_cards"] = n_hidden[idx]
             
                 # TODO: If we first only pretrain and then only self-play then this might not be necessary.
@@ -254,7 +254,8 @@ class SimpleSkyjoEnv(AECEnv):
             final_scores = [int(score) for score in self.table.get_game_metrics()["final_score"]]
             winner_ids = np.argwhere(final_scores == np.min(final_scores)).flatten().tolist()
             self.infos[0]["winner_ids"] = winner_ids
-            self.infos[0]["final_scores"] = final_scores
+            for idx, agent_id in enumerate(self.agents):
+                self.infos[agent_id]["final_score"] = final_scores[agent_id]
 
         if last_action:
             self.truncations[current_agent] = True
