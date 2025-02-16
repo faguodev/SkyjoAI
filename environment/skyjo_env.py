@@ -11,7 +11,7 @@ class RewardConfig(TypedDict, total=False):
     reward_refunded: float
     final_reward: float
     score_per_unknown: float
-    action_reward_decay: float
+    action_reward_reduction: float
     final_reward_offset: float
     curiosity_reward: float
     old_reward: bool
@@ -22,7 +22,7 @@ def default_reward_config() -> RewardConfig:
         "reward_refunded": 0.0,
         "final_reward": 100.0,
         "score_per_unknown": 5.0,
-        "action_reward_decay": 1.0,
+        "action_reward_reduction": 1.0,
         "final_reward_offset": 0.0,
         "curiosity_reward": 4.0,
         "old_reward": False,
@@ -79,7 +79,7 @@ class SimpleSkyjoEnv(AECEnv):
         # Use reward parameters from the config
         self.reward_refunded = self.reward_config["reward_refunded"]
         self.final_reward = self.reward_config["final_reward"]
-        self.action_reward_decay = self.reward_config["action_reward_decay"]
+        self.action_reward_reduction = self.reward_config["action_reward_reduction"]
         self.final_reward_offset = self.reward_config["final_reward_offset"]
         self.score_per_unknown = self.reward_config["score_per_unknown"]
         self.old_reward = self.reward_config["old_reward"]
@@ -121,8 +121,8 @@ class SimpleSkyjoEnv(AECEnv):
         # end obs / actions space
         # end PettingZoo API stuff
 
-    def update_action_reward_decay(self, action_reward_decay):
-        self.action_reward_decay = action_reward_decay
+    def update_action_reward_reduction(self, action_reward_reduction):
+        self.action_reward_reduction = action_reward_reduction
 
     def observation_space(self, agent):
         """
@@ -226,7 +226,7 @@ class SimpleSkyjoEnv(AECEnv):
             # simple delta-based reward
             if score_before - score_after <= 0:
                 self.infos[current_agent]["undesirable_action"] += 1
-            self.rewards[current_agent] = self.action_reward_decay * (score_before - score_after)
+            self.rewards[current_agent] = self.action_reward_reduction * (score_before - score_after)
             if curious:
                 self.rewards[current_agent] += self.curiosity_reward
 
@@ -248,12 +248,11 @@ class SimpleSkyjoEnv(AECEnv):
                 # TODO: If we first only pretrain and then only self-play then this might not be necessary.
                 # Otherwise, we still might need to adapt this due to floating point values introduced by
                 # reward decay. Perhaps rounding other rewards can be a solution.
-            max_reward = max(card_sums.values())
-            winners = [agent_id for agent_id in self.rewards if self.rewards[agent_id] == max_reward]
-                # if not self.old_reward:
-                #     for w in winners:
-                #         self.rewards[w] += 0.5
-            self.infos[0]["winner_ids"] = winners
+
+            final_scores = [int(score) for score in self.table.get_game_metrics()["final_score"]]
+            winner_ids = np.argwhere(final_scores == np.min(final_scores)).flatten().tolist()
+            self.infos[0]["winner_ids"] = winner_ids
+            self.infos[0]["final_scores"] = final_scores
 
         if last_action:
             self.truncations[current_agent] = True

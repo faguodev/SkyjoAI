@@ -26,7 +26,7 @@ skyjo_config = {
         "reward_refunded": 10,
         "final_reward": 100,
         "score_per_unknown": 5.0,
-        "action_reward_decay": 1.0,
+        "action_reward_reduction": 5.0,
         "old_reward": False,
         "curiosity_reward": 0.0,
     },
@@ -39,7 +39,7 @@ model_config = {
     "custom_model": TorchActionMaskModel,
     'vf_share_layers': True,
     # Add the following keys:
-    "fcnet_hiddens": [2048, 2048, 1024, 512],
+    "fcnet_hiddens": [2048, 2048, 2048, 1024, 512],
     "fcnet_activation": "relu",
 }
 
@@ -69,8 +69,8 @@ config = (
             SkyjoLogging_and_SelfPlayCallbacks,
             main_policy_id=0,
             win_rate_threshold=0.8,
-            action_reward_reduction=0.2,
-            action_reward_decay=0.98
+            action_reward_reduction=1.0,
+            action_reward_decay=0.99
         )
     )
     #.callbacks(RewardDecayCallback)
@@ -80,8 +80,8 @@ config = (
     .multi_agent(
         policies={
             "main": (None, obs_space[0], act_space[0], {"entropy_coeff":0.03}),
-            "policy_1": (RandomPolicy, obs_space[1], act_space[1], {"entropy_coeff":0.03}),
-            "policy_2": (RandomPolicy, obs_space[2], act_space[2], {"entropy_coeff":0.03}),
+            "policy_1": (PreProgrammedPolicyOneHot, obs_space[1], act_space[1], {"entropy_coeff":0.03}),
+            "policy_2": (PreProgrammedPolicyOneHot, obs_space[2], act_space[2], {"entropy_coeff":0.03}),
         },
         policy_mapping_fn=policy_mapping_fn,
         policies_to_train=["main"],
@@ -112,7 +112,7 @@ def convert_to_serializable(obj):
 #endregion
 
 config = "_others_direct"
-model_save_dir = "trained_models/v10_trained_models_new_rewards" + config
+model_save_dir = "trained_models/v11_trained_models_new_rewards" + config
 os.makedirs(model_save_dir, exist_ok=True)
 max_steps = 1e10
 max_iters = 100000
@@ -121,15 +121,15 @@ max_iters = 100000
 
 #region Training
 
-if not os.path.exists("logs/logs10"):
-    os.mkdir("logs/logs10")
+if not os.path.exists("logs/logs11"):
+    os.mkdir("logs/logs11")
 
 for iters in range(max_iters):
     result = algo.train()
 
     # Can be adjusted as needed
     if iters % 1 == 0:
-        with open(f"logs/logs10/result_iteration_{iters}.json", "w") as f:
+        with open(f"logs/logs11/result_iteration_{iters}.json", "w") as f:
             json.dump(result, f, indent=4, default=convert_to_serializable)
 
     if iters % 10 == 0:

@@ -8,3 +8,4 @@ ray[rllib]==2.37.0
 setuptools==75.2.0
 torch==2.5.0
 ipywidgets==8.1.5
+bayesian-optimization==2.0.3
