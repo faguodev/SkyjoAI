@@ -226,6 +226,8 @@ class SimpleSkyjoEnv(AECEnv):
             # simple delta-based reward
             if score_before - score_after <= 0:
                 self.infos[current_agent]["undesirable_action"] += 1
+
+            self.rewards[current_agent] = 0
             if curious:
                 self.rewards[current_agent] += self.curiosity_reward
             self.rewards[current_agent] = self.action_reward_reduction * (self.rewards[current_agent] + score_before - score_after)
