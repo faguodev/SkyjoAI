@@ -28,7 +28,7 @@ defaults = {
     "action_reward_reduction": 1,
     "action_reward_decay": 0.995,
     "entropy_coeff": 0.01,
-    "learning_rate": 1e-4
+    #"learning_rate": 1e-4
 }
 
 # Search spaces
@@ -36,7 +36,7 @@ tuning_stages = [
     {"observation_mode": ["simple", "onehot"], "observe_other_player_indirect": [True, False]},
     #{"vf_share_layers": [True, False]},
     {"entropy_coeff": [0.01, 0.03]},
-    {"learning_rate": [1e-4, 1e-3, 1e-2]},
+    #{"learning_rate": [1e-4, 1e-3, 1e-2]},
     {"curiosity_reward": [0.0, 5]},
     {"action_reward_reduction": [1, 5], "action_reward_decay": [0.95, 0.995, 1]}
 ]
@@ -49,13 +49,13 @@ def train_model(
         action_reward_reduction, 
         action_reward_decay, 
         entropy_coeff, 
-        learning_rate, 
+        #learning_rate, 
         neural_network_size):
 
     skyjo_config = {
         "num_players": 2,
         "reward_config": {
-            "score_penalty": 2.0, # Seems useless
+            "score_penalty": 1.0, # Seems useless
             "reward_refunded": 10,
             "final_reward": 100,
             "score_per_unknown": 5.0,
@@ -95,7 +95,7 @@ def train_model(
 
     config = (
         PPOConfig()
-        .training(model=model_config, lr=learning_rate)
+        .training(model=model_config)#, lr=learning_rate)
         .environment("skyjo", env_config=skyjo_config)
         .framework('torch')
         .callbacks(functools.partial(
@@ -131,7 +131,7 @@ def train_model(
     #region Logging
     
     # Automatically generate a unique directory name
-    param_string = f"obs_{observation_mode}_indirect_{observe_other_player_indirect}_vf_{vf_share_layers}_cr_{curiosity_reward}_ar_{action_reward_reduction}_decay_{action_reward_decay}_ent_{entropy_coeff}_lr_{learning_rate}_nn_{neural_network_size}"
+    param_string = f"obs_{observation_mode}_indirect_{observe_other_player_indirect}_vf_{vf_share_layers}_cr_{curiosity_reward}_ar_{action_reward_reduction}_decay_{action_reward_decay}_ent_{entropy_coeff}_nn_{neural_network_size}"#_lr_{learning_rate}
 
     def convert_to_serializable(obj):
         """Convert non-serializable objects to serializable types."""
@@ -164,7 +164,7 @@ def train_model(
         "action_reward_reduction": action_reward_reduction,
         "action_reward_decay": action_reward_decay,
         "entropy_coeff": entropy_coeff,
-        "learning_rate": learning_rate,
+        #"learning_rate": learning_rate,
         "neural_network_size": neural_network_size,
     }
     

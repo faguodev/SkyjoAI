@@ -18,7 +18,7 @@ class RewardConfig(TypedDict, total=False):
 
 def default_reward_config() -> RewardConfig:
     return {
-        "score_penalty": 2.0, # Seems useless
+        "score_penalty": 1.0, # Seems useless
         "reward_refunded": 0.0,
         "final_reward": 100.0,
         "score_per_unknown": 5.0,

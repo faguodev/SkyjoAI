@@ -83,7 +83,7 @@ class RewardDecayCallback(DefaultCallbacks):
 
 skyjo_config_old = {
     "num_players": 3,
-    "score_penalty": 2.0,
+    "score_penalty": 1.0,
     "observe_other_player_indirect": False,
     "mean_reward": 1.0,
     "reward_refunded": 10,
@@ -97,7 +97,7 @@ skyjo_config_old = {
 skyjo_config = {
     "num_players": 3,
     "reward_config": {
-        "score_penalty": 2.0, # Seems useless
+        "score_penalty": 1.0, # Seems useless
         "reward_refunded": 10,
         "final_reward": 100,
         "score_per_unknown": 5.0,
