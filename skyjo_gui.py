@@ -1,18 +1,23 @@
-import tkinter as tk
-from tkinter import messagebox
-from functools import partial
-import random
-from environment.skyjo_game import SkyjoGame
-
-from ray.tune.registry import register_env
-from ray.rllib.env.wrappers.pettingzoo_env import PettingZooEnv
-from ray.rllib.algorithms.ppo import PPOConfig
-
-from environment.skyjo_env import env as skyjo_env
-from ray.rllib.algorithms.callbacks import DefaultCallbacks
+import functools
+import json
 import logging
+import random
+import tkinter as tk
+from functools import partial
+from tkinter import messagebox
 
+from ray.rllib.algorithms.callbacks import DefaultCallbacks
+from ray.rllib.algorithms.ppo import PPOConfig
+from ray.rllib.env.wrappers.pettingzoo_env import PettingZooEnv
+from ray.tune.registry import register_env
+
+from callback_functions import (RewardDecay_Callback,
+                                SkyjoLogging_and_SelfPlayCallbacks)
 from custom_models.action_mask_model import TorchActionMaskModel
+from environment.skyjo_env import env as skyjo_env
+from environment.skyjo_game import SkyjoGame
+from custom_models.fixed_policies import RandomPolicy
+
 
 def random_admissible_policy(obs):
     observation = obs["observations"]
@@ -71,49 +76,47 @@ def pre_programmed_smart_policy(obs):
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+# Load configuration
+#logs/grid_search/obs_simple_indirect_True_vf_True_cr_0_ar_1_decay_1_ent_0.03_nn_[128]
+model_path = "obs_simple_indirect_True_vf_True_cr_0_ar_1_decay_1_ent_0.03_nn_[128]"
+checkpoint = "final"
+config_path = f"logs/grid_search/{model_path}/experiment_config.json"
 
-class RewardDecayCallback(DefaultCallbacks):
-    def on_train_result(self, *, algorithm, result, **kwargs):
-        # Decay the reward scaling factor over training iterations
-        action_reward_decay = max(0.05, 1.0 - result["training_iteration"] * 0.005)
-        # env = algorithm.workers.local_worker().env
-        # env = algorithm.workers.local_env_runner.env
-        algorithm.config.env_config["action_reward_decay"] = action_reward_decay
-        logger.info(action_reward_decay)
+with open(config_path, "r") as f:
+    config = json.load(f)
 
-skyjo_config_old = {
-    "num_players": 3,
-    "score_penalty": 1.0,
-    "observe_other_player_indirect": False,
-    "mean_reward": 1.0,
-    "reward_refunded": 10,
-    "final_reward": 100,
-    "score_per_unknown": 5.0,
-    "action_reward_decay": 1.0,
-    "old_reward": True,
-    "render_mode": "human",
-}
+# Extract configuration parameters
+observation_mode = config["observation_mode"]
+observe_other_player_indirect = config["observe_other_player_indirect"]
+vf_share_layers = config["vf_share_layers"]
+curiosity_reward = config["curiosity_reward"]
+action_reward_reduction = config["action_reward_reduction"]
+action_reward_decay = config["action_reward_decay"]
+entropy_coeff = config["entropy_coeff"]
+neural_network_size = config["neural_network_size"]
 
+# Environment configuration
 skyjo_config = {
-    "num_players": 3,
+    "num_players": 2,
     "reward_config": {
-        "score_penalty": 1.0, # Seems useless
+        "score_penalty": 1.0,
         "reward_refunded": 10,
         "final_reward": 100,
         "score_per_unknown": 5.0,
-        "action_reward_reduction": 2.0,
+        "action_reward_reduction": 0.0,
         "old_reward": False,
-        "curiosity_reward": 0.0,
+        "curiosity_reward": curiosity_reward,
     },
-    "observe_other_player_indirect": False,
+    "observe_other_player_indirect": observe_other_player_indirect,
     "render_mode": "human",
-    "observation_mode": "onehot",
+    "observation_mode": observation_mode,
 }
 
+# Model configuration
 model_config = {
     "custom_model": TorchActionMaskModel,
-    # Add the following keys:
-    "fcnet_hiddens": [2048, 2048, 1024, 512],
+    "vf_share_layers": vf_share_layers,
+    "fcnet_hiddens": neural_network_size,
     "fcnet_activation": "relu",
 }
 
@@ -126,54 +129,62 @@ test_env = env_creator(skyjo_config)
 obs_space = test_env.observation_space
 act_space = test_env.action_space
 
-def policy_mapping_fn(agent_id, _, **kwargs):
-    return "policy_" + str(agent_id) #int(agent_id.split("_")[-1])
+def policy_mapping_fn(agent_id, episode, worker, **kwargs):
+    return "main" if agent_id == 0 else "policy_1"
 
-config_old = (
+# Configure the algorithm
+config = (
     PPOConfig()
-    .training(model=model_config, )
+    .training(model=model_config)
     .environment("skyjo", env_config=skyjo_config)
-    .framework('torch')
-    .callbacks(RewardDecayCallback)
-    .env_runners(num_env_runners=1)
-    # .rollouts(num_rollout_workers=6)
-    .resources(num_gpus=0)
+    .framework("torch")
+    .callbacks(
+        functools.partial(
+            SkyjoLogging_and_SelfPlayCallbacks,
+            main_policy_id=0,
+            win_rate_threshold=0.65,
+            action_reward_reduction=action_reward_reduction,
+            action_reward_decay=action_reward_decay,
+        )
+    )
+    .env_runners(num_env_runners=5)
+    .rollouts(num_rollout_workers=5, num_envs_per_worker=1)
+    .resources(num_gpus=1)
     .multi_agent(
         policies={
-            "policy_0": (None, obs_space[0], act_space[0], {"entropy_coeff":0}),
-            "policy_1": (None, obs_space[1], act_space[1], {"entropy_coeff":0}),
-            "policy_2": (None, obs_space[2], act_space[2], {"entropy_coeff":0})
+            "main": (None, obs_space[0], act_space[0], {"entropy_coeff": entropy_coeff}),
+            "policy_1": (RandomPolicy, obs_space[1], act_space[1], {"entropy_coeff": entropy_coeff}),
         },
-        policy_mapping_fn=policy_mapping_fn,#(lambda agent_id, *args, **kwargs: agent_id),
+        policy_mapping_fn=policy_mapping_fn,
+        policies_to_train=["main"],
     )
     .evaluation(evaluation_num_env_runners=0)
     .debugging(log_level="INFO")
+    .api_stack(enable_rl_module_and_learner=False)
+    .learners(num_gpus_per_learner=1)
 )
 
-algo_old = config_old.build()
-model_save_dir_old = "/home/henry/Documents/SharedDocuments/Uni/TU/3.Semester/AdvRL/SkyjoAI/trained_models/v10_trained_models_new_rewards_others_direct"
-final_dir_old = model_save_dir_old + f"/checkpoint_650"
-algo_old.restore(final_dir_old)
+algo = config.build()
 
-def policy_two(obs):
-    policy = algo_old.get_policy(policy_id=policy_mapping_fn(0, None))
+model_save_dir = f"trained_models/grid_search/{model_path}"
+final_dir = model_save_dir + f"/{checkpoint}"
+
+algo.restore(final_dir)
+
+# def policy_two(obs):
+#     policy = algo_old.get_policy(policy_id=policy_mapping_fn(0, None))
+#     action_exploration_policy, _, action_info = policy.compute_single_action(obs)
+#     # 
+#     action = action_exploration_policy
+#     return action
+
+
+def policy_zero(obs):
+    policy = algo.get_policy(policy_id=policy_mapping_fn(0, None, None))
     action_exploration_policy, _, action_info = policy.compute_single_action(obs)
     # 
     action = action_exploration_policy
     return action
-
-
-def policy_one(obs):
-    policy = algo_old.get_policy(policy_id=policy_mapping_fn(1, None))
-    action_exploration_policy, _, action_info = policy.compute_single_action(obs)
-    # 
-    action = action_exploration_policy
-    return action
-
-
-
-
-
 
 
 class SkyjoGUI:
@@ -484,10 +495,10 @@ class SkyjoGUI:
 if __name__ == "__main__":
     # Define player types: 'human' or an AI function
     player_types = [
-        pre_programmed_smart_policy,
-        random_admissible_policy,
+        #pre_programmed_smart_policy,
+        policy_zero,
         #policy_one,
         'human',
     ]
     # Replace 'human' with random_admissible_policy to make all AI players
-    gui = SkyjoGUI(num_players=3, player_types=player_types, observe_other_players_indirect=True)
+    gui = SkyjoGUI(num_players=2, player_types=player_types, observe_other_players_indirect=True)
