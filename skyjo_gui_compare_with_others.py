@@ -26,7 +26,7 @@ global_turn_count = 0
 # LOAD YOUR SB3 MODEL
 ##############################
 # Suppose you have a model saved at "PPO_1M_multi.zip"
-sb3_model_path = "PPO_1M_multi.zip"
+sb3_model_path = "custom_models/PPO_1M_multi.zip"
 model_env2 = PPO.load(sb3_model_path)
 
 
@@ -164,62 +164,14 @@ def sb3_policy_env2(obs_one: dict, game) -> int:
     return action_one
 
 
-###################################################################
-# 5) USE THIS POLICY IN YOUR SKYjoGUI CODE (Environment One)
-###################################################################
-#
-# Inside your `if __name__ == "__main__":` block (or wherever you configure GUI):
-#
-# from environment.skyjo_game import SkyjoGame
-# from your_module_above import sb3_policy_env2
-#
-# player_types = [
-#     sb3_policy_env2,  # AI using stable-baselines model from env Two
-#     'human',          # or another AI, or 'human'
-# ]
-#
-# gui = SkyjoGUI(num_players=2, player_types=player_types, observe_other_players_indirect=True)
-#
-###################################################################
-# 6) HOW THE GUI CALLS IT
-###################################################################
-#
-# In SkyjoGUI.ai_turn(), you do something like:
-#    obser, mask = self.game.collect_observation(self.current_player)
-#    obs_dict = {"observations": obser, "action_mask": mask}
-#    action_int = self.player_types[self.current_player](obs_dict, self.game)
-#    self.perform_action(action_int)
-#
-# That’s all. Now your SB3 agent from environment Two is playing inside environment One!
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 class SkyjoGUI:
-    def __init__(self, num_players=4, player_types=None, observe_other_players_indirect=False):
+    def __init__(self, 
+            num_players=4, 
+            player_types=None, 
+            observe_other_players_indirect=False,
+            observation_mode="simple"
+        ):
         """
         Initialize the Skyjo game GUI.
         :param num_players: Number of players (max 4)
@@ -230,7 +182,13 @@ class SkyjoGUI:
         assert len(player_types) == num_players, "Player types must match the number of players."
         self.num_players = num_players
         self.player_types = player_types
-        self.game = SkyjoGame(num_players=num_players, observe_other_player_indirect=observe_other_players_indirect)
+        
+        self.game = SkyjoGame(
+            num_players=num_players, 
+            observe_other_player_indirect=observe_other_players_indirect,
+            observation_mode=observation_mode
+        )
+        
         self.root = tk.Tk()
         self.root.title("Skyjo Game")
         self.root.configure(bg='white')  # Set background to white
@@ -305,8 +263,6 @@ class SkyjoGUI:
                 btn.config(state='disabled')
             btn.grid(row=idx % 3, column=idx // 3, padx=2, pady=2)
 
-
-
     def update_ui(self):
         # Update the UI elements based on the game state
 
@@ -376,6 +332,7 @@ class SkyjoGUI:
                 self.disable_piles()
                 self.player_grid_enabled = True
                 self.update_player_grid(next_player)
+    
     def get_card_color(self, value, mask_value):
         # Determine the background and foreground color based on the card value
         if mask_value == 2:
@@ -407,6 +364,7 @@ class SkyjoGUI:
 
     def enable_player_grid(self):
         self.player_grid_enabled = True
+    
     def disable_player_grid(self):
         self.player_grid_enabled = False
 
@@ -531,4 +489,4 @@ if __name__ == "__main__":
         'human',
     ]
     # Replace 'human' with random_admissible_policy to make all AI players
-    gui = SkyjoGUI(num_players=2, player_types=player_types, observe_other_players_indirect=False)
+    gui = SkyjoGUI(num_players=2, player_types=player_types, observe_other_players_indirect=False, observation_mode="simple")
