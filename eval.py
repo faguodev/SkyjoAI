@@ -111,13 +111,10 @@ if __name__ == "__main__":
 
     algo = config.build()
 
-    model_save_dir_old = f"trained_models/grid_search/{model_path}"
-    model_save_dir_new = "v3_trained_models_old_rewards_0.03_0.03_0.03_false"
-    final_dir_old = model_save_dir_old + f"/{checkpoint}"
-    final_dir_new = model_save_dir_new + f"/checkpoint_2200"
+    model_save_dir = f"trained_models/grid_search/{model_path}"
+    final_dir = model_save_dir + f"/{checkpoint}"
 
-    algo.restore(final_dir_old)
-    #algo_new.restore(final_dir_new)
+    algo.restore(final_dir)
 
     env_pettingzoo = skyjo_env(**skyjo_config)
     env_pettingzoo.reset()
