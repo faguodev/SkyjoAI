@@ -35,6 +35,7 @@ action_reward_reduction = config["action_reward_reduction"]
 action_reward_decay = config["action_reward_decay"]
 entropy_coeff = config["entropy_coeff"]
 neural_network_size = config["neural_network_size"]
+curiosity_reward_after_first_run = 0
 
 def get_latest_policy_path(base_path: str) -> Optional[str]:
     """Find the latest policy path either in final/ or checkpoint_x/ directories."""
@@ -78,7 +79,7 @@ skyjo_config = {
         "reward_refunded": 10,
         "final_reward": 100,
         "score_per_unknown": 5.0,
-        "action_reward_reduction": 0.0,
+        "action_reward_reduction": 1.0,
         "old_reward": False,
         "curiosity_reward": curiosity_reward,
     },
@@ -135,6 +136,7 @@ config = (
             win_rate_threshold=0.65,
             action_reward_reduction=action_reward_reduction,
             action_reward_decay=action_reward_decay,
+            curiosity_reward_after_first_run = curiosity_reward_after_first_run,
         )
     )
     .env_runners(num_env_runners=5)
