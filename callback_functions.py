@@ -13,7 +13,7 @@ class RewardDecay_Callback(DefaultCallbacks):
 
 class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
 
-    def __init__(self, main_policy_id, win_rate_threshold, action_reward_reduction, action_reward_decay):
+    def __init__(self, main_policy_id, win_rate_threshold, action_reward_reduction, action_reward_decay, curiosity_reward_after_first_run = 0):
         super().__init__()
         # 0=RandomPolicy, 1=1st main policy snapshot,
         # 2=2nd main policy snapshot, etc..
@@ -23,6 +23,7 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
         self.action_reward_reduction = action_reward_reduction
         self.action_reward_decay = action_reward_decay
         self.main_policy_id = main_policy_id
+        self.curiosity_reward_after_first_run = curiosity_reward_after_first_run
 
     def on_episode_end(        
         self,
@@ -106,7 +107,7 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
 
         print(f"Iter={algorithm.iteration} win-rate={win_rate:3f}, reward_reduction={algorithm.config.env_config['reward_config']['action_reward_reduction']:3f} -> ", end="")
 
-        action_reward_reduction = max(0.01, algorithm.config.env_config['reward_config']["action_reward_reduction"] * self.action_reward_decay)
+        action_reward_reduction = max(0, algorithm.config.env_config['reward_config']["action_reward_reduction"] * self.action_reward_decay)
         algorithm.config.env_config['reward_config']["action_reward_reduction"] = action_reward_reduction
 
         # If win rate is good -> Snapshot current policy and play against
@@ -150,6 +151,7 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
             # We need to sync the just copied local weights (from main policy)
             # to all the remote workers as well.
             algorithm.env_runner_group.sync_weights()
+            algorithm.config.env_config['reward_config']["curiosity_reward"] = self.curiosity_reward_after_first_run
 
             algorithm.config.env_config['reward_config']['action_reward_reduction'] = self.action_reward_reduction
         else:
