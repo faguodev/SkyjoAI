@@ -46,10 +46,10 @@ class SkyjoGame(object):
         # one-hot parameters
         #   => for each card "slot", we produce 17 entries:
         #      [-2..12] => 15 values, plus 1 unknown, plus 1 refunded
-        if self.observation_mode == "simple":
+        if self.observation_mode == "simple" or self.observation_mode == "one_hot_unknown":
             self.one_hot_size = 1
         elif self.observation_mode == "onehot":
-            self.one_hot_size = 17
+            self.one_hot_size = 12
 
         # observation of other players:
         self.observe_other_player_indirect = observe_other_player_indirect
@@ -61,10 +61,17 @@ class SkyjoGame(object):
         #   - If indirect => only own 12 => 12*1/17 = 12/204
         #   - If direct   => all players => num_players*12*1/17
         #   => total = 17 + 2/34 + (12 or num_players*12)*1/17
-        if observe_other_player_indirect:
-            self.obs_shape = (17 + 2*self.one_hot_size + 12*self.one_hot_size,)
-        else:
-            self.obs_shape = (17 + 2*self.one_hot_size + self.num_players*12*self.one_hot_size,)
+        if self.observation_mode == "one_hot_unknown":
+            if observe_other_player_indirect:
+                self.obs_shape = (17 + 2 + 24,) # + additionally 12 one_hot info für verdeckte Karte = 1 wenn verdeckt 0 wenn offen.
+            else:
+                self.obs_shape = (17 + 2 + self.num_players*24,)
+
+        else:    
+            if observe_other_player_indirect:
+                self.obs_shape = (17 + 2*self.one_hot_size + 12*self.one_hot_size,)
+            else:
+                self.obs_shape = (17 + 2*self.one_hot_size + self.num_players*12*self.one_hot_size,)
 
         self.action_mask_shape = (26,)
         self.previous_action = None
@@ -220,6 +227,9 @@ class SkyjoGame(object):
 
         # gather the known cards (still in integer form):
         if self.observe_other_player_indirect:
+            #initialize one_hot array for unknown cards with correct size
+            if self.observation_mode == "one_hot_unknown":
+                one_hot_unknown_obs = np.zeros(12)
             # observe only own 12 cards
             player_obs = self._jit_known_player_cards(
                 self.players_cards,
@@ -228,6 +238,10 @@ class SkyjoGame(object):
                 player_id=player_id,
             )
         else:
+            #initialize one_hot array for unknown cards
+            if self.observation_mode == "one_hot_unknown":
+                one_hot_unknown_obs = np.zeros(12 * self.num_players)
+
             # observe all players' cards
             player_obs = self._jit_known_player_cards_all(
                 self.players_cards,
@@ -273,6 +287,34 @@ class SkyjoGame(object):
             # final observation -> concat everything
             obs = np.concatenate([global_stats, top_discard_oh, hand_card_oh, player_obs_oh])
 
+        elif self.observation_mode == "one_hot_unknown":
+            for ind, val in enumerate(player_obs):
+                if val == self.fill_masked_unknown_value:
+                    one_hot_unknown_obs[ind] = 1
+
+            player_obs = [5 if x == self.fill_masked_unknown_value else x for x in player_obs]
+
+            extended_player_obs = []
+            if self.observe_other_player_indirect:
+                extended_player_obs.append(player_obs)
+                extended_player_obs.append(one_hot_unknown_obs)
+            else:
+                for player in range(self.num_players):
+                    extended_player_obs.append(player_obs[player*12:(player + 1)*12])
+                    extended_player_obs.append(one_hot_unknown_obs[player*12:(player + 1)*12])
+
+            extended_player_obs = np.concatenate(extended_player_obs, axis=0)
+
+            obs = np.array(
+                (
+                    [min(cards_sum.min(), 127)]  # (1,)
+                    + [n_hidden.min()]  # (1,)
+                    + stats_counts  # (15,)
+                    + [top_discard]  # (1,)
+                    + [self.hand_card]  # (1,)
+                    + extended_player_obs # (24,) or (num_players * 24,)
+                ),
+            )
         # verify shape
         assert obs.shape == self.obs_shape, (
             f"Unexpected observation shape {obs.shape}, expected {self.obs_shape}"
