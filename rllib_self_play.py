@@ -37,6 +37,17 @@ entropy_coeff = config["entropy_coeff"]
 neural_network_size = config["neural_network_size"]
 curiosity_reward_after_first_run = 0
 
+#------------------------Config für Sebis letztes training-------------------
+#observation_mode = "simple"
+#observe_other_player_indirect = True
+#vf_share_layers = True
+#curiosity_reward = 5 
+#action_reward_reduction = 1
+#action_reward_decay = 1 
+#entropy_coeff = 0.03
+#neural_network_size =  [32] 
+#curiosity_reward_after_first_run = 0
+
 def get_latest_policy_path(base_path: str) -> Optional[str]:
     """Find the latest policy path either in final/ or checkpoint_x/ directories."""
     # Check final directory first
