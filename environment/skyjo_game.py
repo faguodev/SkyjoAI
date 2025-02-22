@@ -274,7 +274,7 @@ class SkyjoGame(object):
 
             obs = np.array(
                 (
-                    + [min(cards_sum.min(), 127)]  # (1,)
+                    [min(cards_sum.min(), 127)]  # (1,)
                     + [n_hidden.min()]  # (1,)
                     + stats_counts  # (15,)
                     + [top_discard]  # (1,)
@@ -380,7 +380,7 @@ class SkyjoGame(object):
     ):
         if next_action == "place":
             # must be either a card that is front of the player (0 is for refunded)
-            mask_place = (players_masked[player_id] != 0).astype(np.int8)
+            mask_place = (players_masked[player_id] != 0).astype(np.int8) #0-12 is place
             # discard hand card and reveal an masked card
             if previous_action == 24:  # 24 is draw from drawpile
                 mask_place2 = (players_masked[player_id] == 2).astype(np.int8)
@@ -584,9 +584,9 @@ class SkyjoGame(object):
                 f"unless it was drawn from the drawpile."
             )
             place_pos = action_place_to_pos - 12
-            # assert self.players_masked[player_id][place_pos] == 2, (
-            #     f"illegal action: card {place_pos} is already revealed."
-            # )
+            assert self.players_masked[player_id][place_pos] == 2, (
+                f"illegal action: card {place_pos} is already revealed."
+            )
             self.discard_pile.append(self.hand_card)
             self.players_masked[player_id][place_pos] = 1
 

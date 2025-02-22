@@ -19,6 +19,7 @@ logger.setLevel(logging.INFO)
 
 # Change this for your own setup
 neural_net_size = [32]
+max_iters = 1000
 
 defaults = {
     "observation_mode": "simple_port_to_other",
@@ -176,7 +177,6 @@ def train_model(
 
     model_save_dir = f"trained_models/grid_search/{param_string}"
     os.makedirs(model_save_dir, exist_ok=True)
-    max_iters = 1000
 
     #region Training
     
