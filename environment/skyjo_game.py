@@ -585,7 +585,7 @@ class SkyjoGame(object):
             )
             place_pos = action_place_to_pos - 12
             assert self.players_masked[player_id][place_pos] == 2, (
-                f"illegal action: card {place_pos} is already revealed."
+                f"illegal action: card {place_pos} is already revealed for player {player_id}"
             )
             self.discard_pile.append(self.hand_card)
             self.players_masked[player_id][place_pos] = 1

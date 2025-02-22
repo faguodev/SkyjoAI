@@ -11,7 +11,7 @@ from ray.rllib.env.wrappers.pettingzoo_env import PettingZooEnv
 from ray.tune.registry import register_env
 from callback_functions import SkyjoLogging_and_SelfPlayCallbacks
 from custom_models.action_mask_model import TorchActionMaskModel
-from custom_models.fixed_policies import PreProgrammedPolicyOneHot, PreProgrammedPolicySimple, SingleAgentPolicy
+from custom_models.fixed_policies import PreProgrammedPolicyOneHot, PreProgrammedPolicySimple, SingleAgentPolicy, RandomPolicy
 from environment.skyjo_env import env as skyjo_env
 
 logger = logging.getLogger(__name__)
@@ -42,22 +42,6 @@ tuning_stages = [
     {"curiosity_reward": [0.0, 5]},
     {"action_reward_decay": [0.98, 1]},#"action_reward_reduction": [1, 5], 
     {"neural_network_size": [
-        # Single-layer architectures
-        #[128], #[256], [512],
-
-        # Two-layer architectures
-        #[128, 64], #[256, 128], [512, 256],
-
-        # Three-layer architectures
-        #[128, 64, 32], #[256, 128, 64], [512, 256, 128],
-
-        # Bottleneck architectures
-        #[128, 64, 128], #[512, 128, 512], [1024, 256, 1024],
-
-        # Expanding architectures
-        #[64, 128, 256], #[128, 256, 512], [32, 64, 128],
-
-        # Compact architectures
         #[8],#, [128, 32],# [256, 64, 16]
         #[16],#, [32, 32], [64, 32],
         [16], 
