@@ -227,7 +227,7 @@ def act_two_to_act_one(action_two: np.ndarray, expected_action: str, obs_one: di
             reveal_actions = [a for a in range(12, 24) if action_mask[a] == 1]
             if len(reveal_actions) == 0:
                 # fallback if none available (should not happen)
-                return 12
+                return random.choice([a for a in range(0, 12) if action_mask[a] == 1])
             else:
                 return random.choice(reveal_actions)
 
