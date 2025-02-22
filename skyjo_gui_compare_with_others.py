@@ -51,8 +51,6 @@ def obs_one_to_obs_two(obs_one: dict, turn_counter: int) -> np.ndarray:
     Hidden/refunded cards = 15 or -14 => we turn them into 5.0 for environment Two.
     """
     obs_vec = obs_one["observations"]
-    print("obs_vec")
-    print(obs_vec)
     discard_top = obs_vec[17]
     deck_card   = obs_vec[18]
 
@@ -85,8 +83,6 @@ def obs_one_to_obs_two(obs_one: dict, turn_counter: int) -> np.ndarray:
         np.array(board_int_p1, dtype=np.float32),
     ))
 
-    print("obs_env")
-    print(obs_env2)
 
     return obs_env2
 
@@ -134,7 +130,7 @@ def act_two_to_act_one(action_two: np.ndarray, expected_action: str, obs_one: di
             reveal_actions = [a for a in range(12, 24) if action_mask[a] == 1]
             if len(reveal_actions) == 0:
                 # fallback if none available (should not happen)
-                return 12
+                return random.choice([a for a in range(0, 12) if action_mask[a] == 1])
             else:
                 return random.choice(reveal_actions)
 
