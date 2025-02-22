@@ -34,6 +34,8 @@ class SkyjoGame(object):
         self.score_penalty = score_penalty
         self.observation_mode = observation_mode
 
+        self.global_turn_counter = 0
+
         # placeholders for unknown/refunded in the internal game logic:
         self.fill_masked_unknown_value = 15
         self.fill_masked_refunded_value = -14
@@ -46,7 +48,7 @@ class SkyjoGame(object):
         # one-hot parameters
         #   => for each card "slot", we produce 17 entries:
         #      [-2..12] => 15 values, plus 1 unknown, plus 1 refunded
-        if self.observation_mode == "simple" or self.observation_mode == "one_hot_unknown":
+        if self.observation_mode == "simple" or self.observation_mode == "one_hot_unknown" or self.observation_mode == "simple_port_to_other":
             self.one_hot_size = 1
         elif self.observation_mode == "onehot":
             self.one_hot_size = 12
@@ -66,6 +68,11 @@ class SkyjoGame(object):
                 self.obs_shape = (17 + 2 + 24,) # + additionally 12 one_hot info für verdeckte Karte = 1 wenn verdeckt 0 wenn offen.
             else:
                 self.obs_shape = (17 + 2 + self.num_players*24,)
+        elif self.observation_mode == "simple_port_to_other":
+            if observe_other_player_indirect:
+                self.obs_shape = (19 + 2*self.one_hot_size + 12*self.one_hot_size,)
+            else:
+                self.obs_shape = (19 + 2*self.one_hot_size + self.num_players*12*self.one_hot_size,)
 
         else:    
             if observe_other_player_indirect:
@@ -87,6 +94,7 @@ class SkyjoGame(object):
         self.has_terminated = False
         # If None, no one has initiated the last round, else the player_id is saved to indicate who revealed all cards first
         self.last_round_initiator = None
+        self.global_turn_counter = 0
         # metrics
         self.game_metrics = {
             "num_refunded": [0] * self.num_players,
@@ -266,7 +274,24 @@ class SkyjoGame(object):
 
             obs = np.array(
                 (
-                    [min(cards_sum.min(), 127)]  # (1,)
+                    + [min(cards_sum.min(), 127)]  # (1,)
+                    + [n_hidden.min()]  # (1,)
+                    + stats_counts  # (15,)
+                    + [top_discard]  # (1,)
+                    + [self.hand_card]  # (1,)
+                    + player_obs  # (12,) or (num_players * 12,)
+                ),
+            )
+
+        elif self.observation_mode == "simple_port_to_other":
+
+            player_obs = [5 if x == 15 else x for x in player_obs]
+
+            obs = np.array(
+                (
+                    [self.global_turn_counter] # (1,)
+                    + [self.expected_action[1] == "place"] # (1,)
+                    + [min(cards_sum.min(), 127)]  # (1,)
                     + [n_hidden.min()]  # (1,)
                     + stats_counts  # (15,)
                     + [top_discard]  # (1,)
@@ -490,6 +515,9 @@ class SkyjoGame(object):
             if self.last_round_initiator is not None:
                 last_action = True
 
+        if player_id == self.num_players - 1 and self.expected_action[1] == self._name_draw:
+            self.global_turn_counter += 1
+
         self.previous_action = action_int
         self._internal_next_action()
 
@@ -556,9 +584,9 @@ class SkyjoGame(object):
                 f"unless it was drawn from the drawpile."
             )
             place_pos = action_place_to_pos - 12
-            assert self.players_masked[player_id][place_pos] == 2, (
-                f"illegal action: card {place_pos} is already revealed."
-            )
+            # assert self.players_masked[player_id][place_pos] == 2, (
+            #     f"illegal action: card {place_pos} is already revealed."
+            # )
             self.discard_pile.append(self.hand_card)
             self.players_masked[player_id][place_pos] = 1
 

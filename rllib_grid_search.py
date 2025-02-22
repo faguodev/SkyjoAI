@@ -11,34 +11,62 @@ from ray.rllib.env.wrappers.pettingzoo_env import PettingZooEnv
 from ray.tune.registry import register_env
 from callback_functions import SkyjoLogging_and_SelfPlayCallbacks
 from custom_models.action_mask_model import TorchActionMaskModel
-from custom_models.fixed_policies import PreProgrammedPolicyOneHot, PreProgrammedPolicySimple
+from custom_models.fixed_policies import PreProgrammedPolicyOneHot, PreProgrammedPolicySimple, SingleAgentPolicy
 from environment.skyjo_env import env as skyjo_env
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # Change this for your own setup
-neural_net_size = [2048, 2048, 1024, 512]
+neural_net_size = [32]
 
 defaults = {
-    "observation_mode": "simple",
-    "observe_other_player_indirect": True,
+    "observation_mode": "simple_port_to_other",
+    "observe_other_player_indirect": False,
     "vf_share_layers": True,
-    "curiosity_reward": 5.0,
+    "curiosity_reward": 0,
     "action_reward_reduction": 1,
     "action_reward_decay": 0.995,
     "entropy_coeff": 0.01,
+    "neural_network_size": neural_net_size,
     #"learning_rate": 1e-4
 }
 
 # Search spaces
 tuning_stages = [
-    {"observation_mode": ["simple", "onehot"], "observe_other_player_indirect": [True, False]},
+    #{"observation_mode": ["simple"], "observe_other_player_indirect": [True, False]},
     #{"vf_share_layers": [True, False]},
-    {"entropy_coeff": [0.01, 0.03]},
+    #{"entropy_coeff": [0.01, 0.03]},
     #{"learning_rate": [1e-4, 1e-3, 1e-2]},
     {"curiosity_reward": [0.0, 5]},
-    {"action_reward_reduction": [1, 5], "action_reward_decay": [0.95, 0.995, 1]}
+    {"action_reward_decay": [0.98, 1]},#"action_reward_reduction": [1, 5], 
+    {"neural_network_size": [
+        # Single-layer architectures
+        #[128], #[256], [512],
+
+        # Two-layer architectures
+        #[128, 64], #[256, 128], [512, 256],
+
+        # Three-layer architectures
+        #[128, 64, 32], #[256, 128, 64], [512, 256, 128],
+
+        # Bottleneck architectures
+        #[128, 64, 128], #[512, 128, 512], [1024, 256, 1024],
+
+        # Expanding architectures
+        #[64, 128, 256], #[128, 256, 512], [32, 64, 128],
+
+        # Compact architectures
+        #[8],#, [128, 32],# [256, 64, 16]
+        #[16],#, [32, 32], [64, 32],
+        [16], 
+        [64],
+        [128], 
+        #[256], 
+        [256,256]#, [16, 16],#, [16, 32],
+        #[32, 16]
+    ]},
+    #{"curiosity_reward": [5]}
 ]
 
 def train_model(
@@ -107,19 +135,19 @@ def train_model(
             )
         )
         #.callbacks(RewardDecayCallback)
-        .env_runners(num_env_runners=5)
-        .rollouts(num_rollout_workers=5, num_envs_per_worker=1)
+        .env_runners(num_env_runners=1)
+        .rollouts(num_rollout_workers=1, num_envs_per_worker=1)
         .resources(num_gpus=1)
         .multi_agent(
             policies={
                 "main": (None, obs_space[0], act_space[0], {"entropy_coeff": entropy_coeff}),
-                "policy_1": (pre_programmed_policy, obs_space[1], act_space[1], {"entropy_coeff": 0.03}),
+                "policy_1": (SingleAgentPolicy, obs_space[1], act_space[1], {}),
             },
             policy_mapping_fn=policy_mapping_fn,
             policies_to_train=["main"],
         )
         .evaluation(evaluation_num_env_runners=0)
-        .debugging(log_level="WARNING")
+        .debugging(log_level="INFO")
         .api_stack(
             enable_rl_module_and_learner=False,
         )
@@ -148,7 +176,7 @@ def train_model(
 
     model_save_dir = f"trained_models/grid_search/{param_string}"
     os.makedirs(model_save_dir, exist_ok=True)
-    max_iters = 2000
+    max_iters = 1000
 
     #region Training
     
@@ -208,7 +236,7 @@ def evaluate_candidate(params):
     Evaluate a candidate parameter set by training a model and evaluating its performance.
     Returns the mean score from the last 10 iterations.
     """
-    param_string = train_model(**params, neural_network_size=neural_net_size)
+    param_string = train_model(**params)#, neural_network_size=neural_net_size)
     logs_path = f"logs/grid_search/{param_string}"
     return evaluate(logs_path)
 
