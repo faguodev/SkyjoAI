@@ -19,7 +19,7 @@ logger.setLevel(logging.INFO)
 
 # Change this for your own setup
 neural_net_size = [32]
-max_iters = 1000
+max_iters = 500
 
 defaults = {
     "observation_mode": "simple_port_to_other",
@@ -27,7 +27,7 @@ defaults = {
     "vf_share_layers": True,
     "curiosity_reward": 0,
     "action_reward_reduction": 1,
-    "action_reward_decay": 0.995,
+    "action_reward_decay": 1,
     "entropy_coeff": 0.01,
     "neural_network_size": neural_net_size,
     #"learning_rate": 1e-4
@@ -44,10 +44,10 @@ tuning_stages = [
     {"neural_network_size": [
         #[8],#, [128, 32],# [256, 64, 16]
         #[16],#, [32, 32], [64, 32],
-        [16], 
+        #[16], 
         [64],
         [128], 
-        #[256], 
+        [128, 128], 
         [256,256]#, [16, 16],#, [16, 32],
         #[32, 16]
     ]},
@@ -144,7 +144,7 @@ def train_model(
     #region Logging
     
     # Automatically generate a unique directory name
-    param_string = f"obs_{observation_mode}_indirect_{observe_other_player_indirect}_vf_{vf_share_layers}_cr_{curiosity_reward}_ar_{action_reward_reduction}_decay_{action_reward_decay}_ent_{entropy_coeff}_nn_{neural_network_size}"#_lr_{learning_rate}
+    param_string = f"obs_{observation_mode}_indirect_{observe_other_player_indirect}_vf_{vf_share_layers}_cr_{curiosity_reward}_ar_{action_reward_reduction}_decay_{action_reward_decay}_ent_{entropy_coeff}_nn_{neural_network_size}_against_other"#_lr_{learning_rate}
 
     def convert_to_serializable(obj):
         """Convert non-serializable objects to serializable types."""
