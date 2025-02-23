@@ -289,7 +289,7 @@ class SkyjoGame(object):
 
             obs = np.array(
                 (
-                    [self.global_turn_counter] # (1,)
+                    [min(max(self.global_turn_counter, 0), 127)] # (1,)
                     + [self.expected_action[1] == "place"] # (1,)
                     + [min(cards_sum.min(), 127)]  # (1,)
                     + [n_hidden.min()]  # (1,)
@@ -515,7 +515,7 @@ class SkyjoGame(object):
             if self.last_round_initiator is not None:
                 last_action = True
 
-        if player_id == self.num_players - 1 and self.expected_action[1] == self._name_draw:
+        if player_id == self.num_players - 1 and self.expected_action[1] == self._name_draw and self.global_turn_counter<127:
             self.global_turn_counter += 1
 
         self.previous_action = action_int
