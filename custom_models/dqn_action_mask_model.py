@@ -6,6 +6,7 @@ from ray.rllib.models.torch.fcnet import FullyConnectedNetwork as TorchFC
 from ray.rllib.models.torch.torch_modelv2 import TorchModelV2
 from ray.rllib.utils.framework import try_import_torch
 from ray.rllib.utils.torch_utils import FLOAT_MIN
+import numpy as np
 
 torch, nn = try_import_torch()
 
@@ -60,7 +61,7 @@ class DQNActionMaskModel(TorchModelV2, nn.Module):
         # with open(f"/home/henry/Documents/SharedDocuments/Uni/TU/3.Semester/AdvRL/SkyjoAI/file{time.time()}.txt", "w") as f:
         #     f.write(q_values)
         #     f.write(self.internal_model({'obs': input_dict['obs']['observations']}))
-        # print(f"{q_values=}")
+        print(f"{q_values=}")
         # print(self.internal_model({'obs': input_dict['obs']['observations']}))
         # print(f"{action_mask=}")
 
@@ -68,7 +69,7 @@ class DQNActionMaskModel(TorchModelV2, nn.Module):
         masked_q_values = q_values + inf_mask
         # print(f"{inf_mask=}")
         # print(f"{masked_q_values=}")
-        # print(f"Probabilities: {torch.softmax(masked_q_values, dim=-1)}")
+        print(f"Probabilities: {torch.softmax(masked_q_values, dim=-1)}")
 
         return masked_q_values, state
 

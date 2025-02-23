@@ -84,6 +84,7 @@ def train_model(
         # Add the following keys:
         "fcnet_hiddens": neural_network_size,
         "fcnet_activation": "relu",
+        # "no_final_linear": True,
     }
 
     def env_creator(config):
@@ -138,6 +139,12 @@ def train_model(
             enable_rl_module_and_learner=False,
         )
         .learners(num_gpus_per_learner=1)
+        .exploration(
+            exploration_config={
+                "type": "SoftQ",
+                "temperature": 10.0  # Controls randomness, higher = more exploration
+            }
+        )
     )
 
     algo = config.build()

@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # Load configuration
-model_path = "obs_eff_one_hot_indirect_True_vf_True_cr_5_ar_1_decay_0.995_ent_0.03_nn_[64, 64]_sebischeme"
+model_path = "obs_eff_one_hot_indirect_True_vf_True_cr_5_ar_1_decay_0.995_ent_0.03_nn_[64, 64]_sebischeme_2"
 #config_path = f"logs/grid_search/{model_path}/experiment_config.json"
 
 #with open(config_path, "r") as f:
