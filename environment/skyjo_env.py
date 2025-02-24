@@ -7,7 +7,6 @@ from environment.skyjo_game import SkyjoGame
 from typing import TypedDict
 
 class RewardConfig(TypedDict, total=False):
-    score_penalty: float
     reward_refunded: float
     final_reward: float
     score_per_unknown: float
@@ -18,7 +17,6 @@ class RewardConfig(TypedDict, total=False):
 
 def default_reward_config() -> RewardConfig:
     return {
-        "score_penalty": 1.0, # Seems useless
         "reward_refunded": 0.0,
         "final_reward": 100.0,
         "score_per_unknown": 5.0,
@@ -65,7 +63,6 @@ class SimpleSkyjoEnv(AECEnv):
 
         self.table = SkyjoGame(
             num_players=num_players,
-            score_penalty=self.reward_config["score_penalty"],
             observe_other_player_indirect=observe_other_player_indirect,
             observation_mode=self.observation_mode,
         )
