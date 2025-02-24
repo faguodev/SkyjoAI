@@ -343,7 +343,171 @@ class SingleAgentPolicy(Policy):
         # fallback
         return 24
     
+class EfficientSingleAgentPolicy(Policy):
+    def __init__(self, observation_space, action_space, config):
+        super().__init__(observation_space, action_space, config)
+        self.sb3_model_path = "custom_models/PPO_1M_multi.zip"
+        self.model_env2 = PPO.load(self.sb3_model_path)
 
+
+    def compute_actions(
+        self,
+        obs,
+        state_batches,
+        prev_action_batch,
+        prev_reward_batch,
+        info_batch,
+        episodes,
+        explore,
+        timestep,
+        **kwargs,
+    ):
+        
+        """
+        Policy function integrating the SB3 model from environment Two into environment One.
+
+        Steps:
+        1) Convert PettingZoo obs -> env2 obs (with turn count)
+        2) model.predict(obs_env2)
+        3) convert env2 action -> env1 action
+        """
+        action_mask = obs[0][:26] #["action_mask"]
+        observation = obs[0][26:] #["observations"]
+
+        #print(type(observation))
+
+        obs_env2 = self._obs_one_to_obs_two(observation)
+        action_two, _ = self.model_env2.predict(obs_env2, deterministic=True)
+
+        next_action = observation[1]  # "draw" or "place"
+        action_one = self._act_two_to_act_one(action_two, next_action, action_mask)
+
+        #print(action_one)
+        return np.asarray([action_one]), [], {}
+
+    ##############################
+    # OBSERVATION MAPPING
+    ##############################
+    def _obs_one_to_obs_two(self, obs_one: np.ndarray) -> np.ndarray:
+        """
+        Convert Environment One observation dict into an Environment Two–style observation.
+
+        For a 2-player game in Environment One (PettingZoo):
+        obs_one["observations"] might have length 43:
+            - Indices:
+            3 -> discard_top
+            4 -> deck_card
+            19..31 -> 12 cards for player0
+            31..43 -> 12 cards for player1
+
+        We’ll build a single array of length 27:
+        [discard_top, turn_counter, deck_card, 12 board vals (player0), 12 board vals (player1)]
+
+        Hidden/refunded cards = 15 or -14 => we turn them into 5.0 for environment Two.
+        """
+        turn_counter = obs_one[0]
+        obs_vec = obs_one[2:]
+        discard_top = obs_vec[17]
+        deck_card   = obs_vec[18]
+
+        # Grab the 12 cards for player0
+        raw_board_p0 = obs_vec[19:31]
+        board_int_p0 = []
+        for val in raw_board_p0:
+            if val == 15:
+                board_int_p0.append(5.0)
+            
+            elif val == -14:  # Hidden/refunded
+                board_int_p0.append(0.0)
+            else:
+                board_int_p0.append(float(val))
+
+        # Grab the 12 cards for player1
+        raw_board_p1 = obs_vec[43:55]
+        board_int_p1 = []
+        for val in raw_board_p1:
+            if val == 15 or val == -14:
+                board_int_p1.append(5.0)
+            else:
+                board_int_p1.append(float(val))
+
+        state = float(turn_counter)
+
+        obs_env2 = np.concatenate((
+            np.array([discard_top, state, deck_card], dtype=np.float32),
+            np.array(board_int_p0, dtype=np.float32),
+            np.array(board_int_p1, dtype=np.float32),
+        ))
+
+        #print("obs_env")
+        #print(obs_env2)
+
+        return obs_env2
+
+
+    ##############################
+    # ACTION MAPPING
+    ##############################
+    def _act_two_to_act_one(self, action_two: np.ndarray, expected_action: str, action_mask) -> int:
+        """
+        Convert the (2,) action from environment Two to a single integer action for environment One.
+
+        action_two[0]: 0=draw from deck, 1=take from discard
+        action_two[1]: 0..11=place at position, 12=discard & reveal
+
+        Environment One action mapping:
+        - expected_action="draw": 
+            if draw_or_take=0 -> 24 (draw from deck)
+            if draw_or_take=1 -> 25 (take from discard)
+        - expected_action="place":
+            if place_or_discover<12 -> place that position (0..11)
+            if place_or_discover=12 -> reveal a random masked card:
+                valid reveal actions are 12..23, filtered by action_mask.
+        """
+        draw_or_take = action_two[0]
+        place_or_discover = action_two[1]
+
+        if expected_action == 0:
+            # Draw step
+            if draw_or_take == 0:
+                return 24  # draw from draw pile
+            else:
+                return 25  # take from discard pile
+
+        elif expected_action == 1:
+
+            # Place step
+            if place_or_discover < 12:
+                # place hand card onto that position
+
+                if action_mask[place_or_discover]:
+                    return place_or_discover
+                else:
+                    print("################################\n\nCatastrophic Failure0")
+                    return random.choice([a for a in range(0, 12) if action_mask[a] == 1])
+            else:
+                # Need to reveal a card: pick a random masked card action from 12..23
+                reveal_actions = [a for a in range(12, 24) if action_mask[a] == 1]
+                if len(reveal_actions) == 0:
+                    # fallback if none available (should not happen)
+                    print("################################\n\nCatastrophic Failure1")
+                    return random.choice([a for a in range(0, 12) if action_mask[a] == 1])
+                else:
+                    action = random.choice(reveal_actions)
+                    if not action_mask[action]:
+                        print("################################\n\nCatastrophic Failure2")
+                        return random.choice([a for a in range(0, 12) if action_mask[a] == 1])
+                    return action
+
+        # fallback
+        return 24
+    def learn_on_batch(self, samples):
+        return {}  # No learning, as this is a fixed policy.
+    def get_weights(self):
+        return {}
+    def set_weights(self, weights):
+        pass
+    
 
 class PreProgrammedPolicyEfficientOneHot(Policy):
     def compute_actions(

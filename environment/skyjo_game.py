@@ -48,7 +48,7 @@ class SkyjoGame(object):
         # one-hot parameters
         #   => for each card "slot", we produce 17 entries:
         #      [-2..12] => 15 values, plus 1 unknown, plus 1 refunded
-        if self.observation_mode == "simple" or self.observation_mode == "efficient_one_hot" or self.observation_mode == "simple_port_to_other":
+        if self.observation_mode == "simple" or self.observation_mode == "efficient_one_hot" or self.observation_mode == "simple_port_to_other" or self.observation_mode == "efficient_one_hot_port_to_other":
             self.one_hot_size = 1
         elif self.observation_mode == "onehot":
             self.one_hot_size = 12
@@ -73,6 +73,11 @@ class SkyjoGame(object):
                 self.obs_shape = (19 + 2*self.one_hot_size + 12*self.one_hot_size,)
             else:
                 self.obs_shape = (19 + 2*self.one_hot_size + self.num_players*12*self.one_hot_size,)
+        elif self.observation_mode == "efficient_one_hot_port_to_other":
+            if observe_other_player_indirect:
+                self.obs_shape = (19 + 2 + 24,)
+            else:
+                self.obs_shape = (19 + 2 + self.num_players*24,)
 
         else:    
             if observe_other_player_indirect:
@@ -236,7 +241,7 @@ class SkyjoGame(object):
         # gather the known cards (still in integer form):
         if self.observe_other_player_indirect:
             #initialize one_hot array for unknown cards with correct size
-            if self.observation_mode == "efficient_one_hot":
+            if self.observation_mode == "efficient_one_hot" or self.observation_mode == "efficient_one_hot_port_to_other":
                 efficient_one_hot_obs = np.zeros(12)
             # observe only own 12 cards
             player_obs = self._jit_known_player_cards(
@@ -247,7 +252,7 @@ class SkyjoGame(object):
             )
         else:
             #initialize one_hot array for unknown cards
-            if self.observation_mode == "efficient_one_hot":
+            if self.observation_mode == "efficient_one_hot" or self.observation_mode == "efficient_one_hot_port_to_other":
                 efficient_one_hot_obs = np.zeros(12 * self.num_players)
 
             # observe all players' cards
@@ -299,6 +304,27 @@ class SkyjoGame(object):
                     + player_obs  # (12,) or (num_players * 12,)
                 ),
             )
+
+        elif self.observation_mode == "efficient_one_hot_port_to_other":
+            for ind, val in enumerate(player_obs):
+                if val == self.fill_masked_unknown_value:
+                    efficient_one_hot_obs[ind] = 1
+
+            player_obs = [5 if x == self.fill_masked_unknown_value else x for x in player_obs]
+
+            extended_player_obs = []
+            if self.observe_other_player_indirect:
+                extended_player_obs.append(player_obs)
+                extended_player_obs.append(efficient_one_hot_obs)
+            else:
+                for player in range(self.num_players):
+                    extended_player_obs.append(player_obs[player*12:(player + 1)*12])
+                    extended_player_obs.append(efficient_one_hot_obs[player*12:(player + 1)*12])
+
+            extended_player_obs = np.concatenate(extended_player_obs, axis=0)
+
+            obs = np.concatenate([[min(max(self.global_turn_counter, 0), 127)], [self.expected_action[1] == "place"], global_stats, [top_discard], [self.hand_card], extended_player_obs])
+            #     sizes:      17               , 1           ,    1        ,     24 or 24*num_players            
 
         elif self.observation_mode == "onehot":
             # one-hot encode top_discard & hand_card => shape (17,) each
