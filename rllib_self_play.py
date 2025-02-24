@@ -86,7 +86,6 @@ def get_latest_policy_path(base_path: str) -> Optional[str]:
 skyjo_config = {
     "num_players": 2,
     "reward_config": {
-        "score_penalty": 1.0,
         "reward_refunded": 10,
         "final_reward": 100,
         "score_per_unknown": 5.0,

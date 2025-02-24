@@ -57,7 +57,6 @@ def train_model(
     skyjo_config = {
         "num_players": 2,
         "reward_config": {
-            "score_penalty": 1.0, # Seems useless
             "reward_refunded": 10,
             "final_reward": 100,
             "score_per_unknown": 5.0,
