@@ -35,7 +35,7 @@ defaults = {
 tuning_stages = [
     #{"observation_mode": ["simple_port_to_other", "efficient_one_hot_port_to_other"]},
     #{"curiosity_reward": [0.0, 5]},
-    {"action_reward_decay": [0.98, 0.995, 0.95], "action_reward_reduction": [1, 5]}
+    {"action_reward_decay": [0.98, 0.995, 0.95], "action_reward_reduction": [1, 5]},
     {
         "neural_network_size": [
             [16], 
