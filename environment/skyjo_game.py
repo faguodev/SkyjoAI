@@ -50,7 +50,7 @@ class SkyjoGame(object):
         if self.observation_mode == "simple" or self.observation_mode == "efficient_one_hot" or self.observation_mode == "simple_port_to_other" or self.observation_mode == "efficient_one_hot_port_to_other":
             self.one_hot_size = 1
         elif self.observation_mode == "onehot":
-            self.one_hot_size = 12
+            self.one_hot_size = 17
 
         # observation of other players:
         self.observe_other_player_indirect = observe_other_player_indirect
