@@ -144,7 +144,6 @@ config = (
             main_policy_id=0,
             win_rate_threshold=0.65,
             action_reward_reduction=action_reward_reduction,
-            action_reward_decay=action_reward_decay,
         )
     )
     .env_runners(num_env_runners=5)
@@ -501,4 +500,4 @@ if __name__ == "__main__":
         'human',
     ]
     # Replace 'human' with random_admissible_policy to make all AI players
-    gui = SkyjoGUI(num_players=2, player_types=player_types, observe_other_players_indirect=True, observation_mode="one_hot")
+    gui = SkyjoGUI(num_players=2, player_types=player_types, observe_other_players_indirect=True, observation_mode="onehot")
