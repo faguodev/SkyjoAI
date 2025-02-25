@@ -17,17 +17,15 @@ from environment.skyjo_env import env as skyjo_env
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# Change this for your own setup
-neural_net_size = [2048, 2048, 1024, 512]
-
 defaults = {
     "observation_mode": "simple",
     "observe_other_player_indirect": True,
     "vf_share_layers": True,
     "curiosity_reward": 5.0,
     "action_reward_reduction": 1,
-    "action_reward_decay": 0.995,
+    "action_reward_decay": 0.98,
     "entropy_coeff": 0.01,
+    "neural_network_size": [16],
     #"learning_rate": 1e-4
 }
 
@@ -102,7 +100,6 @@ def train_model(
                 main_policy_id=0,
                 win_rate_threshold=0.8,
                 action_reward_reduction=action_reward_decay, # Search
-                action_reward_decay=action_reward_decay # Search
             )
         )
         #.callbacks(RewardDecayCallback)
@@ -130,7 +127,7 @@ def train_model(
     #region Logging
     
     # Automatically generate a unique directory name
-    param_string = f"obs_{observation_mode}_indirect_{observe_other_player_indirect}_vf_{vf_share_layers}_cr_{curiosity_reward}_ar_{action_reward_reduction}_decay_{action_reward_decay}_ent_{entropy_coeff}_nn_{neural_network_size}"#_lr_{learning_rate}
+    param_string = f"obs_{observation_mode}_indirect_{observe_other_player_indirect}_vf_{vf_share_layers}_cr_{curiosity_reward}_ar_{action_reward_reduction}_decay_{action_reward_decay}_ent_{entropy_coeff}_nn_{neural_network_size}_test"#_lr_{learning_rate}
 
     def convert_to_serializable(obj):
         """Convert non-serializable objects to serializable types."""
@@ -170,8 +167,14 @@ def train_model(
     with open(f"{logs_save_dir}/experiment_config.json", "w") as f:
         json.dump(config_params, f, indent=4, default=convert_to_serializable)
 
+    tmp_action_reward_reduction = action_reward_reduction
+
     for iters in range(max_iters):
         result = algo.train()
+        tmp_action_reward_reduction *= action_reward_decay
+        if tmp_action_reward_reduction < 0.05:
+            tmp_action_reward_reduction = 0
+        algo.env_runner_group.foreach_env(lambda env: env.env.update_action_reward_reduction(tmp_action_reward_reduction))
 
         # Can be adjusted as needed
         if iters % 1 == 0:
@@ -207,7 +210,7 @@ def evaluate_candidate(params):
     Evaluate a candidate parameter set by training a model and evaluating its performance.
     Returns the mean score from the last 10 iterations.
     """
-    param_string = train_model(**params, neural_network_size=neural_net_size)
+    param_string = train_model(**params)
     logs_path = f"logs/grid_search/{param_string}"
     return evaluate(logs_path)
 

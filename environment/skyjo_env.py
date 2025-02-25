@@ -251,6 +251,7 @@ class SimpleSkyjoEnv(AECEnv):
             final_scores = [int(score) for score in self.table.get_game_metrics()["final_score"]]
             winner_ids = np.argwhere(final_scores == np.min(final_scores)).flatten().tolist()
             self.infos[0]["winner_ids"] = winner_ids
+            self.infos[0]["action_reward_reduction"] = self.action_reward_reduction
             for idx, agent_id in enumerate(self.agents):
                 self.infos[agent_id]["final_score"] = final_scores[agent_id]
 
