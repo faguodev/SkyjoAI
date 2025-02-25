@@ -324,19 +324,16 @@ class SingleAgentPolicy(Policy):
                 if action_mask[place_or_discover]:
                     return place_or_discover
                 else:
-                    print("################################\n\nCatastrophic Failure0")
                     return random.choice([a for a in range(0, 12) if action_mask[a] == 1])
             else:
                 # Need to reveal a card: pick a random masked card action from 12..23
                 reveal_actions = [a for a in range(12, 24) if action_mask[a] == 1]
                 if len(reveal_actions) == 0:
                     # fallback if none available (should not happen)
-                    print("################################\n\nCatastrophic Failure1")
                     return random.choice([a for a in range(0, 12) if action_mask[a] == 1])
                 else:
                     action = random.choice(reveal_actions)
                     if not action_mask[action]:
-                        print("################################\n\nCatastrophic Failure2")
                         return random.choice([a for a in range(0, 12) if action_mask[a] == 1])
                     return action
 
@@ -491,19 +488,16 @@ class EfficientSingleAgentPolicy(Policy):
                 if action_mask[place_or_discover]:
                     return place_or_discover
                 else:
-                    print("################################\n\nCatastrophic Failure0")
                     return random.choice([a for a in range(0, 12) if action_mask[a] == 1])
             else:
                 # Need to reveal a card: pick a random masked card action from 12..23
                 reveal_actions = [a for a in range(12, 24) if action_mask[a] == 1]
                 if len(reveal_actions) == 0:
                     # fallback if none available (should not happen)
-                    print("################################\n\nCatastrophic Failure1")
                     return random.choice([a for a in range(0, 12) if action_mask[a] == 1])
                 else:
                     action = random.choice(reveal_actions)
                     if not action_mask[action]:
-                        print("################################\n\nCatastrophic Failure2")
                         return random.choice([a for a in range(0, 12) if action_mask[a] == 1])
                     return action
 
