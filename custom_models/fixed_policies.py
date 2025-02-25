@@ -343,6 +343,14 @@ class SingleAgentPolicy(Policy):
         # fallback
         return 24
     
+    def learn_on_batch(self, samples):
+        return {}  # No learning, as this is a fixed policy.
+    def get_weights(self):
+        return {}
+    def set_weights(self, weights):
+        pass
+    
+    
 class EfficientSingleAgentPolicy(Policy):
     def __init__(self, observation_space, action_space, config):
         super().__init__(observation_space, action_space, config)
