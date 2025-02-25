@@ -109,7 +109,7 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
             result[ENV_RUNNER_RESULTS]["hist_stats"]["win_rate"] = []
         result[ENV_RUNNER_RESULTS]["hist_stats"]["win_rate"].append(win_rate)
 
-        print(f"Iter={algorithm.iteration} win-rate={win_rate:3f}, reward_reduction={algorithm.config.env_config['reward_config']['action_reward_reduction']:3f} -> ", end="")
+        print(f"Iter={algorithm.iteration} win-rate={win_rate:3f} -> ", end="")
 
         # If win rate is good -> Snapshot current policy and play against
         # it next, keeping the snapshot fixed and only improving the "main"

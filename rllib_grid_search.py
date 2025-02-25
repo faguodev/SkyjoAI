@@ -11,47 +11,48 @@ from ray.rllib.env.wrappers.pettingzoo_env import PettingZooEnv
 from ray.tune.registry import register_env
 from callback_functions import SkyjoLogging_and_SelfPlayCallbacks
 from custom_models.action_mask_model import TorchActionMaskModel
-from custom_models.fixed_policies import PreProgrammedPolicyOneHot, PreProgrammedPolicySimple, SingleAgentPolicy, RandomPolicy, EfficientSingleAgentPolicy
+from custom_models.fixed_policies import PreProgrammedPolicyOneHot, PreProgrammedPolicySimple, SingleAgentPolicy, RandomPolicy, EfficientSingleAgentPolicy, PreProgrammedPolicyEfficientOneHot
 from environment.skyjo_env import env as skyjo_env
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # Change this for your own setup
-max_iters = 10000
 
 defaults = {
-    "observation_mode": "simple",
-    "observe_other_player_indirect": True,
+    "observation_mode": "simple_port_to_other",
+    "observe_other_player_indirect": False,
     "vf_share_layers": True,
-    "curiosity_reward": 0,
+    "curiosity_reward": 3,
     "action_reward_reduction": 1,
     "action_reward_decay": 0.98,
     "entropy_coeff": 0.01,
     "neural_network_size": [16],
-    #"learning_rate": 1e-4
+    "max_iters": 1000,
 }
 
 # Search spaces
 tuning_stages = [
-    #{"observation_mode": ["simple"], "observe_other_player_indirect": [True, False]},
-    #{"vf_share_layers": [True, False]},
-    #{"entropy_coeff": [0.01, 0.03]},
-    #{"learning_rate": [1e-4, 1e-3, 1e-2]},
+    #{"observation_mode": ["simple_port_to_other", "efficient_one_hot_port_to_other"]},
     #{"curiosity_reward": [0.0, 5]},
     #{"action_reward_decay": [0.98, 1]},#"action_reward_reduction": [1, 5], 
-    {"neural_network_size": [
-        #[8],#, [128, 32],# [256, 64, 16]
-        #[16],#, [32, 32], [64, 32],
-        [16], 
-        #[64, 64],
-        #[32]
-        #[32, 32],
-        #[128, 128], 
-        #[256,256]#, [16, 16],#, [16, 32],
-        #[32, 16]
-    ]},
-    #{"curiosity_reward": [5]}
+    {
+        "neural_network_size": [
+            [16], 
+            [32],
+            [64],
+        ], 
+        "observation_mode": ["simple_port_to_other","efficient_one_hot_port_to_other"],
+        "max_iters": [1000],   
+    },
+    {
+        "neural_network_size": [
+            [32, 32],
+            [64, 64],
+        ], 
+        "observation_mode": ["simple_port_to_other","efficient_one_hot_port_to_other"],
+        "max_iters": [5000],
+    }
 ]
 
 def train_model(
@@ -62,6 +63,7 @@ def train_model(
         action_reward_reduction, 
         action_reward_decay, 
         entropy_coeff, 
+        max_iters,
         #learning_rate, 
         neural_network_size):
 
@@ -81,9 +83,15 @@ def train_model(
     }
 
     if observation_mode == "onehot":
-        pre_programmed_policy = PreProgrammedPolicyOneHot
+        opponent_policy = PreProgrammedPolicyOneHot
     elif observation_mode == "simple":
-        pre_programmed_policy = PreProgrammedPolicySimple
+        opponent_policy = PreProgrammedPolicySimple
+    elif observation_mode == "simple_port_to_other":
+        opponent_policy = SingleAgentPolicy
+    elif observation_mode == "efficient_one_hot_port_to_other":
+        opponent_policy = EfficientSingleAgentPolicy
+    elif observation_mode == "efficient_one_hot":
+        opponent_policy = PreProgrammedPolicyEfficientOneHot
 
     model_config = {
         "custom_model": TorchActionMaskModel,
@@ -114,17 +122,17 @@ def train_model(
                 SkyjoLogging_and_SelfPlayCallbacks,
                 main_policy_id=0,
                 win_rate_threshold=0.8,
-                action_reward_reduction=action_reward_decay, # Search
+                action_reward_reduction=action_reward_reduction, # Search
             )
         )
         #.callbacks(RewardDecayCallback)
-        .env_runners(num_env_runners=1)
-        .rollouts(num_rollout_workers=1, num_envs_per_worker=1)
+        .env_runners(num_env_runners=4)
+        .rollouts(num_rollout_workers=4, num_envs_per_worker=1)
         .resources(num_gpus=1)
         .multi_agent(
             policies={
                 "main": (None, obs_space[0], act_space[0], {"entropy_coeff": entropy_coeff}),
-                "policy_1": (pre_programmed_policy, obs_space[1], act_space[1], {}),
+                "policy_1": (opponent_policy, obs_space[1], act_space[1], {}),
             },
             policy_mapping_fn=policy_mapping_fn,
             policies_to_train=["main"],
@@ -142,7 +150,7 @@ def train_model(
     #region Logging
     
     # Automatically generate a unique directory name
-    param_string = f"obs_{observation_mode}_indirect_{observe_other_player_indirect}_vf_{vf_share_layers}_cr_{curiosity_reward}_ar_{action_reward_reduction}_decay_{action_reward_decay}_ent_{entropy_coeff}_nn_{neural_network_size}_del2"#_lr_{learning_rate}
+    param_string = f"obs_{observation_mode}_indirect_{observe_other_player_indirect}_vf_{vf_share_layers}_cr_{curiosity_reward}_ar_{action_reward_reduction}_fixed_decay_{action_reward_decay}_ent_{entropy_coeff}_nn_{neural_network_size}_against_other"#_lr_{learning_rate}
 
     def convert_to_serializable(obj):
         """Convert non-serializable objects to serializable types."""
@@ -184,6 +192,7 @@ def train_model(
     tmp_action_reward_reduction = action_reward_reduction
 
     for iters in range(max_iters):
+        print(f"Starting iteration {iters}/{max_iters}")
         result = algo.train()
         tmp_action_reward_reduction *= action_reward_decay
         if tmp_action_reward_reduction < 0.05:
