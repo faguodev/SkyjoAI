@@ -13,7 +13,7 @@ class RewardDecay_Callback(DefaultCallbacks):
 
 class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
 
-    def __init__(self, main_policy_id, win_rate_threshold, action_reward_reduction, action_reward_decay, curiosity_reward_after_first_run = 0):
+    def __init__(self, main_policy_id, win_rate_threshold, action_reward_reduction, curiosity_reward_after_first_run = 0):
         super().__init__()
         # 0=RandomPolicy, 1=1st main policy snapshot,
         # 2=2nd main policy snapshot, etc..
@@ -21,7 +21,6 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
         self.winning_policy = []
         self.win_rate_threshold = win_rate_threshold
         self.action_reward_reduction = action_reward_reduction
-        self.action_reward_decay = action_reward_decay
         self.main_policy_id = main_policy_id
         self.curiosity_reward_after_first_run = curiosity_reward_after_first_run
 
@@ -111,13 +110,6 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
         result[ENV_RUNNER_RESULTS]["hist_stats"]["win_rate"].append(win_rate)
 
         print(f"Iter={algorithm.iteration} win-rate={win_rate:3f}, reward_reduction={algorithm.config.env_config['reward_config']['action_reward_reduction']:3f} -> ", end="")
-
-        action_reward_reduction = max(0, algorithm.config.env_config['reward_config']["action_reward_reduction"] * self.action_reward_decay)
-
-        if action_reward_reduction < 0.05:
-            action_reward_reduction = 0
-
-        #algorithm.config.env_config['reward_config']["action_reward_reduction"] = action_reward_reduction
 
         # If win rate is good -> Snapshot current policy and play against
         # it next, keeping the snapshot fixed and only improving the "main"

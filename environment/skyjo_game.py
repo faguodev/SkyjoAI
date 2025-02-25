@@ -20,7 +20,6 @@ class SkyjoGame(object):
     def __init__(
         self, 
         num_players: int = 3, 
-        score_penalty=2, 
         observe_other_player_indirect=False,
         observation_mode="simple",
     ) -> None:
@@ -31,7 +30,7 @@ class SkyjoGame(object):
 
         # init objects
         self.num_players = num_players
-        self.score_penalty = score_penalty
+
         self.observation_mode = observation_mode
 
         self.global_turn_counter = 0
@@ -543,7 +542,7 @@ class SkyjoGame(object):
         if self.expected_action[0] == self.last_round_initiator:
             self.has_terminated = True
             self.game_metrics["final_score"] = self._evaluate_game(
-                self.players_cards, player_id, score_penalty=self.score_penalty
+                self.players_cards, player_id
             )
             game_over = True
 
@@ -677,7 +676,7 @@ class SkyjoGame(object):
     @staticmethod
     @njit(fastmath=True)
     def _evaluate_game(
-        players_cards, player_won_id, score_penalty: float = 2.0
+        players_cards, player_won_id
     ) -> List[int]:
         """
         calculate game scores
@@ -693,8 +692,6 @@ class SkyjoGame(object):
                     score[pl] += np.sum(cards_stack_3_tup)
 
         # penalty if finisher is not the actual winner
-        if min(score) != score[player_won_id]:
-            score[player_won_id] *= score_penalty
         return score
 
     def get_game_metrics(self):

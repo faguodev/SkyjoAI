@@ -1,0 +1,1 @@
+{"type": "Algorithm", "checkpoint_version": "1.1", "format": "cloudpickle", "state_file": "trained_models/self_play/obs_eff_one_hot_indirect_True_vf_True_cr_5_ar_1_decay_0.995_ent_0.03_nn_[64, 64]_sebischeme2/checkpoint_12500/algorithm_state.pkl", "policy_ids": ["main", "policy_1"], "ray_version": "2.37.0", "ray_commit": "1b620f244c4fb67d80661046091573fb6eefecb6"}

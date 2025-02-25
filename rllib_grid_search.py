@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # Change this for your own setup
-neural_net_size = [16]
 max_iters = 10000
 
 defaults = {
@@ -27,9 +26,9 @@ defaults = {
     "vf_share_layers": True,
     "curiosity_reward": 0,
     "action_reward_reduction": 1,
-    "action_reward_decay": 0.5,
-    "entropy_coeff": 0.03,
-    "neural_network_size": neural_net_size,
+    "action_reward_decay": 0.98,
+    "entropy_coeff": 0.01,
+    "neural_network_size": [16],
     #"learning_rate": 1e-4
 }
 
@@ -69,7 +68,6 @@ def train_model(
     skyjo_config = {
         "num_players": 2,
         "reward_config": {
-            "score_penalty": 1.0, # Seems useless
             "reward_refunded": 10,
             "final_reward": 100,
             "score_per_unknown": 5.0,
@@ -117,7 +115,6 @@ def train_model(
                 main_policy_id=0,
                 win_rate_threshold=0.8,
                 action_reward_reduction=action_reward_decay, # Search
-                action_reward_decay=action_reward_decay # Search
             )
         )
         #.callbacks(RewardDecayCallback)
@@ -184,10 +181,14 @@ def train_model(
     with open(f"{logs_save_dir}/experiment_config.json", "w") as f:
         json.dump(config_params, f, indent=4, default=convert_to_serializable)
 
+    tmp_action_reward_reduction = action_reward_reduction
+
     for iters in range(max_iters):
         result = algo.train()
-        algo.config.env_config['reward_config']["action_reward_reduction"] = max(0, algo.config.env_config['reward_config']["action_reward_reduction"] * action_reward_decay)
-        algo.env_runner_group.foreach_env(lambda env: env.env.update_action_reward_reduction(0.7))
+        tmp_action_reward_reduction *= action_reward_decay
+        if tmp_action_reward_reduction < 0.05:
+            tmp_action_reward_reduction = 0
+        algo.env_runner_group.foreach_env(lambda env: env.env.update_action_reward_reduction(tmp_action_reward_reduction))
 
         # Can be adjusted as needed
         if iters % 1 == 0:
@@ -223,7 +224,7 @@ def evaluate_candidate(params):
     Evaluate a candidate parameter set by training a model and evaluating its performance.
     Returns the mean score from the last 10 iterations.
     """
-    param_string = train_model(**params)#, neural_network_size=neural_net_size)
+    param_string = train_model(**params)
     logs_path = f"logs/grid_search/{param_string}"
     return evaluate(logs_path)
 
