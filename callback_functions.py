@@ -67,6 +67,11 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
                 if metric_name not in episode.hist_data:
                     episode.hist_data[metric_name] = []
                 episode.hist_data[metric_name].append(info["final_score"])
+            if "action_reward_reduction" in info:
+                metric_name = f"action_reward_reduction_{agent_id}"
+                if metric_name not in episode.hist_data:
+                    episode.hist_data[metric_name] = []
+                episode.hist_data[metric_name].append(info["action_reward_reduction"])
 
                 #episode.custom_metrics["winning_policy"].append([episode.policy_for(id) for id in info["winner_ids"]])
                 
@@ -108,7 +113,11 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
         print(f"Iter={algorithm.iteration} win-rate={win_rate:3f}, reward_reduction={algorithm.config.env_config['reward_config']['action_reward_reduction']:3f} -> ", end="")
 
         action_reward_reduction = max(0, algorithm.config.env_config['reward_config']["action_reward_reduction"] * self.action_reward_decay)
-        algorithm.config.env_config['reward_config']["action_reward_reduction"] = action_reward_reduction
+
+        if action_reward_reduction < 0.05:
+            action_reward_reduction = 0
+
+        #algorithm.config.env_config['reward_config']["action_reward_reduction"] = action_reward_reduction
 
         # If win rate is good -> Snapshot current policy and play against
         # it next, keeping the snapshot fixed and only improving the "main"
