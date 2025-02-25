@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # Change this for your own setup
-neural_net_size = [2048, 2048, 1024, 512]
+neural_net_size = [64]
 
 defaults = {
     "observation_mode": "simple",
@@ -107,8 +107,8 @@ def train_model(
             )
         )
         #.callbacks(RewardDecayCallback)
-        .env_runners(num_env_runners=5)
-        .rollouts(num_rollout_workers=5, num_envs_per_worker=1)
+        .env_runners(num_env_runners=1)
+        .rollouts(num_rollout_workers=1, num_envs_per_worker=1)
         .resources(num_gpus=1)
         .multi_agent(
             policies={
