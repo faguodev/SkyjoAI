@@ -127,7 +127,7 @@ if __name__ == "__main__":
             p= action_mask/np.sum(action_mask)
         )
     
-    def preprogrammed_policy_port_to_other(
+    def preprogrammed_policy_simple_port_to_other(
         observation,
         action_mask
     ):
@@ -219,7 +219,7 @@ if __name__ == "__main__":
             elif agent == 1:
                 # 
                 #action = random_admissible_policy(observation, action_mask)
-                action = preprogrammed_policy(observation, action_mask)
+                action = preprogrammed_policy_simple_port_to_other(observation, action_mask)
             # elif agent == 2:
             #     policy = algo.get_policy(policy_id=policy_mapping_fn(1, None, None))
             #     action_exploration_policy, _, action_info = policy.compute_single_action(obs)

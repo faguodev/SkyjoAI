@@ -265,7 +265,7 @@ def random_admissible_policy(observation, action_mask):
         p= action_mask/np.sum(action_mask)
     )
 
-def pre_programmed_smart_policy(obs):
+def pre_programmed_smart_policy_simple(obs):
     observation = obs["observations"]
     action_mask = obs["action_mask"]
     admissible_actions = [i for i, mask in enumerate(action_mask) if mask == 1]
@@ -298,8 +298,8 @@ def pre_programmed_smart_policy(obs):
                 if max_card_value < 5:
                     max_card_value = 5
                     imax = i
-            elif max_card_value < observation[idx_start] - 2:
-                max_card_value = observation[idx_start]-2
+            elif max_card_value < observation[idx_start]:
+                max_card_value = observation[idx_start]
                 imax = i
         #print(masked_cards)
         #1st case hand card value is lower equal than 3 (if card was taken from discard this branch will be taken for 100%)
