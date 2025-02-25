@@ -23,7 +23,7 @@ defaults = {
     "observation_mode": "simple_port_to_other",
     "observe_other_player_indirect": False,
     "vf_share_layers": True,
-    "curiosity_reward": 3,
+    "curiosity_reward": 0,
     "action_reward_reduction": 1,
     "action_reward_decay": 0.98,
     "entropy_coeff": 0.01,
@@ -35,7 +35,7 @@ defaults = {
 tuning_stages = [
     #{"observation_mode": ["simple_port_to_other", "efficient_one_hot_port_to_other"]},
     #{"curiosity_reward": [0.0, 5]},
-    {"action_reward_decay": [0.98, 0.995, 0.95]},#"action_reward_reduction": [1, 5], 
+    {"action_reward_decay": [0.98, 0.995, 0.95], "action_reward_reduction": [1, 5]}
     {
         "neural_network_size": [
             [16], 
