@@ -33,6 +33,8 @@ class SkyjoGame(object):
 
         self.observation_mode = observation_mode
 
+        self.global_turn_counter = 0
+
         # placeholders for unknown/refunded in the internal game logic:
         self.fill_masked_unknown_value = 15
         self.fill_masked_refunded_value = -14
@@ -45,10 +47,10 @@ class SkyjoGame(object):
         # one-hot parameters
         #   => for each card "slot", we produce 17 entries:
         #      [-2..12] => 15 values, plus 1 unknown, plus 1 refunded
-        if self.observation_mode == "simple" or self.observation_mode == "efficient_one_hot":
+        if self.observation_mode == "simple" or self.observation_mode == "efficient_one_hot" or self.observation_mode == "simple_port_to_other" or self.observation_mode == "efficient_one_hot_port_to_other":
             self.one_hot_size = 1
         elif self.observation_mode == "onehot":
-            self.one_hot_size = 12
+            self.one_hot_size = 17
 
         # observation of other players:
         self.observe_other_player_indirect = observe_other_player_indirect
@@ -65,6 +67,16 @@ class SkyjoGame(object):
                 self.obs_shape = (17 + 2 + 24,) # + additionally 12 one_hot info für verdeckte Karte = 1 wenn verdeckt 0 wenn offen.
             else:
                 self.obs_shape = (17 + 2 + self.num_players*24,)
+        elif self.observation_mode == "simple_port_to_other":
+            if observe_other_player_indirect:
+                self.obs_shape = (19 + 2*self.one_hot_size + 12*self.one_hot_size,)
+            else:
+                self.obs_shape = (19 + 2*self.one_hot_size + self.num_players*12*self.one_hot_size,)
+        elif self.observation_mode == "efficient_one_hot_port_to_other":
+            if observe_other_player_indirect:
+                self.obs_shape = (19 + 2 + 24,)
+            else:
+                self.obs_shape = (19 + 2 + self.num_players*24,)
 
         else:    
             if observe_other_player_indirect:
@@ -86,6 +98,7 @@ class SkyjoGame(object):
         self.has_terminated = False
         # If None, no one has initiated the last round, else the player_id is saved to indicate who revealed all cards first
         self.last_round_initiator = None
+        self.global_turn_counter = 0
         # metrics
         self.game_metrics = {
             "num_refunded": [0] * self.num_players,
@@ -227,7 +240,7 @@ class SkyjoGame(object):
         # gather the known cards (still in integer form):
         if self.observe_other_player_indirect:
             #initialize one_hot array for unknown cards with correct size
-            if self.observation_mode == "efficient_one_hot":
+            if self.observation_mode == "efficient_one_hot" or self.observation_mode == "efficient_one_hot_port_to_other":
                 efficient_one_hot_obs = np.zeros(12)
             # observe only own 12 cards
             player_obs = self._jit_known_player_cards(
@@ -238,7 +251,7 @@ class SkyjoGame(object):
             )
         else:
             #initialize one_hot array for unknown cards
-            if self.observation_mode == "efficient_one_hot":
+            if self.observation_mode == "efficient_one_hot" or self.observation_mode == "efficient_one_hot_port_to_other":
                 efficient_one_hot_obs = np.zeros(12 * self.num_players)
 
             # observe all players' cards
@@ -273,6 +286,44 @@ class SkyjoGame(object):
                     + player_obs  # (12,) or (num_players * 12,)
                 ),
             )
+
+        elif self.observation_mode == "simple_port_to_other":
+
+            player_obs = [5 if x == 15 else x for x in player_obs]
+
+            obs = np.array(
+                (
+                    [min(max(self.global_turn_counter, 0), 127)] # (1,)
+                    + [self.expected_action[1] == "place"] # (1,)
+                    + [min(cards_sum.min(), 127)]  # (1,)
+                    + [n_hidden.min()]  # (1,)
+                    + stats_counts  # (15,)
+                    + [top_discard]  # (1,)
+                    + [self.hand_card]  # (1,)
+                    + player_obs  # (12,) or (num_players * 12,)
+                ),
+            )
+
+        elif self.observation_mode == "efficient_one_hot_port_to_other":
+            for ind, val in enumerate(player_obs):
+                if val == self.fill_masked_unknown_value:
+                    efficient_one_hot_obs[ind] = 1
+
+            player_obs = [5 if x == self.fill_masked_unknown_value else x for x in player_obs]
+
+            extended_player_obs = []
+            if self.observe_other_player_indirect:
+                extended_player_obs.append(player_obs)
+                extended_player_obs.append(efficient_one_hot_obs)
+            else:
+                for player in range(self.num_players):
+                    extended_player_obs.append(player_obs[player*12:(player + 1)*12])
+                    extended_player_obs.append(efficient_one_hot_obs[player*12:(player + 1)*12])
+
+            extended_player_obs = np.concatenate(extended_player_obs, axis=0)
+
+            obs = np.concatenate([[min(max(self.global_turn_counter, 0), 127)], [self.expected_action[1] == "place"], global_stats, [top_discard], [self.hand_card], extended_player_obs])
+            #     sizes:      17               , 1           ,    1        ,     24 or 24*num_players            
 
         elif self.observation_mode == "onehot":
             # one-hot encode top_discard & hand_card => shape (17,) each
@@ -346,7 +397,7 @@ class SkyjoGame(object):
     ):
         if next_action == "place":
             # must be either a card that is front of the player (0 is for refunded)
-            mask_place = (players_masked[player_id] != 0).astype(np.int8)
+            mask_place = (players_masked[player_id] != 0).astype(np.int8) #0-12 is place
             # discard hand card and reveal an masked card
             if previous_action == 24:  # 24 is draw from drawpile
                 mask_place2 = (players_masked[player_id] == 2).astype(np.int8)
@@ -481,6 +532,9 @@ class SkyjoGame(object):
             if self.last_round_initiator is not None:
                 last_action = True
 
+        if player_id == self.num_players - 1 and self.expected_action[1] == self._name_draw and self.global_turn_counter<127:
+            self.global_turn_counter += 1
+
         self.previous_action = action_int
         self._internal_next_action()
 
@@ -548,7 +602,7 @@ class SkyjoGame(object):
             )
             place_pos = action_place_to_pos - 12
             assert self.players_masked[player_id][place_pos] == 2, (
-                f"illegal action: card {place_pos} is already revealed."
+                f"illegal action: card {place_pos} is already revealed for player {player_id}"
             )
             self.discard_pile.append(self.hand_card)
             self.players_masked[player_id][place_pos] = 1

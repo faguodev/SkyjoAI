@@ -22,9 +22,10 @@ global_turn_count = 0
 
 #region Ours
 # Load configuration
-model_path = "obs_simple_indirect_True_vf_True_cr_0_ar_1_decay_1_ent_0.03_nn_[16]"
-checkpoint = "final"
-config_path = f"logs/grid_search/{model_path}/experiment_config.json"
+model_path = "obs_simple_indirect_True_vf_True_cr_5_ar_1_decay_0.98_ent_0.03_nn_[256, 256]"
+checkpoint = "checkpoint_8500"
+step = "self_play"
+config_path = f"logs/{step}/{model_path}/experiment_config.json"
 
 with open(config_path, "r") as f:
     config = json.load(f)
@@ -110,7 +111,7 @@ config = (
 
 algo = config.build()
 
-model_save_dir = f"trained_models/grid_search/{model_path}"
+model_save_dir = f"trained_models/{step}/{model_path}"
 final_dir = model_save_dir + f"/{checkpoint}"
 
 algo.restore(final_dir)
@@ -226,7 +227,7 @@ def act_two_to_act_one(action_two: np.ndarray, expected_action: str, obs_one: di
             reveal_actions = [a for a in range(12, 24) if action_mask[a] == 1]
             if len(reveal_actions) == 0:
                 # fallback if none available (should not happen)
-                return 12
+                return random.choice([a for a in range(0, 12) if action_mask[a] == 1])
             else:
                 return random.choice(reveal_actions)
 
@@ -263,6 +264,61 @@ def random_admissible_policy(observation, action_mask):
         np.arange(len(action_mask)),
         p= action_mask/np.sum(action_mask)
     )
+
+def pre_programmed_smart_policy_simple(obs):
+    observation = obs["observations"]
+    action_mask = obs["action_mask"]
+    admissible_actions = [i for i, mask in enumerate(action_mask) if mask == 1]
+    #check wether card still has to be taken from discard pile or draw pile
+    if 24 in admissible_actions:
+        #choose wether to take the upper most card from the discard pile or choose a random from the draw pile
+        #if card on discard pile has value smaller equal 3 take it
+        if observation[17] <= 3:
+            action = 25
+        #else draw random card from draw pile
+        else:
+            action = 24
+    #if card was already taken from deck/discard pile continue with placing/throwing away
+    else:
+        #go through one-hot-encoded hand cards to find value of hand card
+        # for i, hand in enumerate(observation[34:50]):
+        #     if hand == 1:
+        hand_card_value = observation[18]
+        #find position and highest value of players cards (here unknown cards are valued as 5)
+        max_card_value = -2
+        masked_cards = []
+        for i in range(12):
+            idx_start = i+19
+            #print("starting idx:",idx_start)
+            #print("observation looping through: ", observation[idx_start:idx_start+16])
+            #find value of current card (17th one-hot-encoded field is for refunded cards and therefore ignored)
+            if observation[idx_start] == 5:
+                masked_cards.append(i)
+                #print(f"appending {i}")
+                if max_card_value < 5:
+                    max_card_value = 5
+                    imax = i
+            elif max_card_value < observation[idx_start]:
+                max_card_value = observation[idx_start]
+                imax = i
+        #print(masked_cards)
+        #1st case hand card value is lower equal than 3 (if card was taken from discard this branch will be taken for 100%)
+        #place card on position with max_card_value
+        if hand_card_value <= 3:
+            action = imax
+        #else if hand is smaller than max_card_value replace card with higest value with handcard
+        elif hand_card_value < max_card_value:
+            action = imax
+        #else throw hand card away and reveal masked card
+        else:
+            action = 12 + random.choice(masked_cards)
+            for a in admissible_actions:
+                if a in np.array(masked_cards) + 12:
+                    action = a
+            #print(action, "chosen action - observation: ", observation[(51 + (action-12)*17):(68 + (action-12)*17)])
+        assert action != 26, ("No Valid action was chosen!")
+    return action
+
 
 wins_dict = {
     0: 0,
@@ -310,6 +366,8 @@ while i_episode <= 1000:
                     "observations": obs,
                     "action_mask": mask
                 }
+            # action = pre_programmed_smart_policy(observation)
+            
             policy = algo.get_policy(policy_id=policy_mapping_fn(agent, None, None))
             action_exploration_policy, _, action_info = policy.compute_single_action(observation)
             # 
@@ -321,7 +379,7 @@ while i_episode <= 1000:
             }
             action = sb3_policy_env2(observation, game)
 
-            # action = random_admissible_policy(obs, mask)
+            # action = pre_programmed_smart_policy(obs, mask)
             
         # Execute action
         try:
@@ -336,6 +394,19 @@ while i_episode <= 1000:
     if game.has_terminated and all_good:
         scores = [int(x) for x in game.game_metrics["final_score"]]
         print(f"Scores: {scores}")
+        (
+            stats_counts,
+            cards_sum,
+            n_hidden,
+            top_discard,
+        ) = game._jit_observe_global_game_stats(
+            game.players_cards,
+            game.players_masked,
+            np.array(game.discard_pile, dtype=game.players_cards.dtype),
+            count_players_cards=not game.observe_other_player_indirect,
+        )
+        print(n_hidden)
+        print(cards_sum)
         winner = scores.index(min(scores))
         wins_dict[winner] += 1
     else:

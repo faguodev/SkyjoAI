@@ -25,7 +25,7 @@ def random_admissible_policy(obs):
     admissible_actions = [i for i, mask in enumerate(action_mask) if mask == 1]
     return random.choice(admissible_actions)
 
-def pre_programmed_smart_policy(obs):
+def pre_programmed_smart_policy_one_hot(obs):
     observation = obs["observations"]
     action_mask = obs["action_mask"]
     admissible_actions = [i for i, mask in enumerate(action_mask) if mask == 1]
@@ -144,7 +144,6 @@ config = (
             main_policy_id=0,
             win_rate_threshold=0.65,
             action_reward_reduction=action_reward_reduction,
-            action_reward_decay=action_reward_decay,
         )
     )
     .env_runners(num_env_runners=5)
@@ -188,7 +187,7 @@ def policy_zero(obs):
 
 
 class SkyjoGUI:
-    def __init__(self, num_players=4, player_types=None, observe_other_players_indirect=False):
+    def __init__(self, num_players=4, player_types=None, observe_other_players_indirect=False, observation_mode="simple"):
         """
         Initialize the Skyjo game GUI.
         :param num_players: Number of players (max 4)
@@ -199,7 +198,7 @@ class SkyjoGUI:
         assert len(player_types) == num_players, "Player types must match the number of players."
         self.num_players = num_players
         self.player_types = player_types
-        self.game = SkyjoGame(num_players=num_players, observe_other_player_indirect=observe_other_players_indirect)
+        self.game = SkyjoGame(num_players=num_players, observe_other_player_indirect=observe_other_players_indirect, observation_mode=observation_mode)
         self.root = tk.Tk()
         self.root.title("Skyjo Game")
         self.root.configure(bg='white')  # Set background to white
@@ -495,10 +494,10 @@ class SkyjoGUI:
 if __name__ == "__main__":
     # Define player types: 'human' or an AI function
     player_types = [
-        #pre_programmed_smart_policy,
-        policy_zero,
+        pre_programmed_smart_policy_one_hot,
+        #policy_zero,
         #policy_one,
         'human',
     ]
     # Replace 'human' with random_admissible_policy to make all AI players
-    gui = SkyjoGUI(num_players=2, player_types=player_types, observe_other_players_indirect=True)
+    gui = SkyjoGUI(num_players=2, player_types=player_types, observe_other_players_indirect=True, observation_mode="onehot")
