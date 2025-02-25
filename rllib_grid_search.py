@@ -27,7 +27,7 @@ defaults = {
     "action_reward_reduction": 1,
     "action_reward_decay": 0.98,
     "entropy_coeff": 0.01,
-    "neural_network_size": [16],
+    "neural_network_size": [32],
     "max_iters": 1000,
 }
 
@@ -35,7 +35,7 @@ defaults = {
 tuning_stages = [
     #{"observation_mode": ["simple_port_to_other", "efficient_one_hot_port_to_other"]},
     #{"curiosity_reward": [0.0, 5]},
-    #{"action_reward_decay": [0.98, 1]},#"action_reward_reduction": [1, 5], 
+    {"action_reward_decay": [0.98, 0.995, 0.95]},#"action_reward_reduction": [1, 5], 
     {
         "neural_network_size": [
             [16], 
@@ -52,7 +52,7 @@ tuning_stages = [
         ], 
         "observation_mode": ["simple_port_to_other","efficient_one_hot_port_to_other"],
         "max_iters": [5000],
-    }
+    },
 ]
 
 def train_model(
