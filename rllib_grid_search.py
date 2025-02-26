@@ -222,10 +222,26 @@ def evaluate(logs_path):
     for file in files:
         with open(file) as f:
             d = json.load(f)
-            for hist_stat in ["final_score_0"]:
+            for hist_stat in ["final_score_0", "win_rate"]:
                 hist_stats[hist_stat].append(np.array(d["env_runners"]["hist_stats"][hist_stat]))
                 hist_stats[hist_stat+"_mean"].append(np.mean(hist_stats[hist_stat][-1]))
-    return np.mean(hist_stats["final_score_0_mean"][-10:])
+    
+    # Find the window with the highest win rate
+    win_rate_means = hist_stats["win_rate_mean"]
+    max_win_rate = 0
+    max_win_rate_idx = 0
+    
+    for idx in range(len(win_rate_means) - 30):
+        current_win_rate = np.mean(win_rate_means[idx:idx+30])
+        if current_win_rate > max_win_rate:
+            max_win_rate = current_win_rate
+            max_win_rate_idx = idx
+    
+    mean_win_rate = np.mean(hist_stats["win_rate_mean"][max_win_rate_idx:max_win_rate_idx+30])
+    print(f"Mean win rate: {mean_win_rate}")
+    
+    return mean_win_rate# mean_final_score, 
+
 
 def evaluate_candidate(params):
     """
@@ -254,16 +270,19 @@ def run_staged_grid_search():
         print(f"Training {len(candidates)} candidates for stage {i+1}")
         
         # Evaluate each candidate and find the best one
-        best_score = float('inf')  # We want to minimize the card sum
+        best_score = -1
         best_candidate = None
         
         for candidate in candidates:
             print(f"Training candidate: {candidate}")
             score = evaluate_candidate(candidate)
             print(f"Candidate {candidate} achieved score: {score}")
-            if score < best_score:
+            if score > best_score:
                 best_score = score
                 best_candidate = candidate
+            print(f"Best score after stage {i+1}: {best_score}")
+            print(f"Best candidate after stage {i+1}: {best_candidate}")
+
             
         if best_candidate is None:
             print(f"No valid candidates found in stage {i+1}")
