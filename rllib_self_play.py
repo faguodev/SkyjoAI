@@ -192,7 +192,6 @@ config = (
             SkyjoLogging_and_SelfPlayCallbacks,
             main_policy_id=0,
             win_rate_threshold=0.65,
-            action_reward_reduction=action_reward_reduction,
         )
     )
     .env_runners(num_env_runners=5)
