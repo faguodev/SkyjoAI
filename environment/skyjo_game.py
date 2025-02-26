@@ -64,7 +64,7 @@ class SkyjoGame(object):
         #   => total = 17 + 2/34 + (12 or num_players*12)*1/17
         if self.observation_mode == "efficient_one_hot":
             if observe_other_player_indirect:
-                self.obs_shape = (17 + 2 + 24,) # + additionally 12 one_hot info für verdeckte Karte = 1 wenn verdeckt 0 wenn offen.
+                self.obs_shape = (17 + 2 + 24,) # + additionally 12 one_hot info for unknown Cards. These take the values = 1 if unknown or 0 if known/revealed.
             else:
                 self.obs_shape = (17 + 2 + self.num_players*24,)
         elif self.observation_mode == "simple_port_to_other":
