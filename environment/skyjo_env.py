@@ -11,7 +11,6 @@ class RewardConfig(TypedDict, total=False):
     final_reward: float
     score_per_unknown: float
     action_reward_reduction: float
-    final_reward_offset: float
     curiosity_reward: float
     old_reward: bool
 
@@ -21,7 +20,6 @@ def default_reward_config() -> RewardConfig:
         "final_reward": 100.0,
         "score_per_unknown": 5.0,
         "action_reward_reduction": 1.0,
-        "final_reward_offset": 0.0,
         "curiosity_reward": 4.0,
         "old_reward": False,
     }
@@ -77,7 +75,6 @@ class SimpleSkyjoEnv(AECEnv):
         self.reward_refunded = self.reward_config["reward_refunded"]
         self.final_reward = self.reward_config["final_reward"]
         self.action_reward_reduction = self.reward_config["action_reward_reduction"]
-        self.final_reward_offset = self.reward_config["final_reward_offset"]
         self.score_per_unknown = self.reward_config["score_per_unknown"]
         self.old_reward = self.reward_config["old_reward"]
         self.curiosity_reward = self.reward_config["curiosity_reward"]
@@ -217,9 +214,6 @@ class SimpleSkyjoEnv(AECEnv):
         score_after = card_sum[current_agent] + self.score_per_unknown * n_hidden[current_agent]
 
         if not game_over:
-            # player revealed all => we give final reward offset
-        #     self.rewards[current_agent] = self.final_reward_offset - card_sum[current_agent]
-        # else:
             # simple delta-based reward
             if score_before - score_after <= 0:
                 self.infos[current_agent]["undesirable_action"] += 1
