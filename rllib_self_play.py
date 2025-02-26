@@ -13,14 +13,18 @@ from ray.rllib.policy import Policy
 
 from callback_functions import (RewardDecay_Callback, SkyjoLogging_and_SelfPlayCallbacks)
 from custom_models.action_mask_model import TorchActionMaskModel
-from custom_models.fixed_policies import RandomPolicy
+from custom_models.fixed_policies import (RandomPolicy, PreProgrammedPolicyEfficientOneHot, PreProgrammedPolicyOneHot, PreProgrammedPolicySimple)
 from environment.skyjo_env import env as skyjo_env
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+#You can either load a policy to continue training it or train a completely new model!
+
 # Load configuration
+#----------------------------Load model config from grid_search------------------------------
 model_path = "obs_simple_indirect_True_vf_True_cr_5_ar_1_decay_1_ent_0.01_nn_[2048, 2048, 1024, 512]"
+safe_path = model_path
 config_path = f"logs/grid_search/{model_path}/experiment_config.json"
 
 with open(config_path, "r") as f:
@@ -35,18 +39,44 @@ action_reward_reduction = config["action_reward_reduction"]
 action_reward_decay = config["action_reward_decay"]
 entropy_coeff = config["entropy_coeff"]
 neural_network_size = config["neural_network_size"]
-curiosity_reward_after_first_run = 0
+#---------------------------------------------------------------------------------------------------------
 
-#------------------------Config für Sebis letztes training-------------------
-#observation_mode = "simple"
+
+#----------------------------Load model config from previous self_play------------------------------
+#model_path = "obs_eff_one_hot_indirect_True_vf_True_cr_5_ar_1_decay_0.996_ent_0.03_nn_[64, 64]"
+#safe_path = "obs_eff_one_hot_indirect_True_vf_True_cr_5_ar_1_decay_0.996_ent_0.03_nn_[64, 64]"
+
+    #--------------if file "experiment_config" is available use this------------------
+#config_path = f"logs/self_play/{model_path}/experiment_config.json"
+
+#with open(config_path, "r") as f:
+#    config = json.load(f)
+
+# Extract configuration parameters
+#observation_mode = config["observation_mode"]
+#observe_other_player_indirect = config["observe_other_player_indirect"]
+#vf_share_layers = config["vf_share_layers"]
+#curiosity_reward = config["curiosity_reward"]
+#action_reward_reduction = config["action_reward_reduction"]
+#action_reward_decay = config["action_reward_decay"]
+#entropy_coeff = config["entropy_coeff"]
+#neural_network_size = config["neural_network_size"]
+    #-----------------------------------------------------------------------------------
+
+    #--------------if no file "experiment_config" is available adapt the following manually------------------
+#----------------Config for training completely new model (or if no "experiment_config" file is available)-----------------
+#safe_path = "obs_eff_one_hot_indirect_True_vf_True_cr_0_ar_1_decay_0.95_ent_0.03_nn_[64]"
+
+#observation_mode = "efficient_one_hot"
 #observe_other_player_indirect = True
 #vf_share_layers = True
-#curiosity_reward = 5 
+#curiosity_reward = 0 
 #action_reward_reduction = 1
-#action_reward_decay = 1 
+#action_reward_decay = 0.95
 #entropy_coeff = 0.03
-#neural_network_size =  [32] 
-#curiosity_reward_after_first_run = 0
+#neural_network_size = [64] 
+#---------------------------------------------------------------------------------------------------------
+
 
 def get_latest_policy_path(base_path: str) -> Optional[str]:
     """Find the latest policy path either in final/ or checkpoint_x/ directories."""
@@ -119,19 +149,37 @@ def policy_mapping_fn(agent_id, episode, worker, **kwargs):
     return "main" if agent_id == 0 else "policy_1"
 
 # Create directories for logging and checkpoints
-os.makedirs(f"logs/self_play/{model_path}", exist_ok=True)
-os.makedirs(f"trained_models/self_play/{model_path}", exist_ok=True)
+os.makedirs(f"logs/self_play/{safe_path}", exist_ok=True)
+os.makedirs(f"trained_models/self_play/{safe_path}", exist_ok=True)
 
+
+#---------------------------EITHER automatically choose model to load from previous training - NOT needed if new model is trained------------------------------
 # Load the latest trained policy
+
+    #----------------------from grid_search------------------
 latest_policy_path = get_latest_policy_path(
     f"trained_models/grid_search/{model_path}"
 )
+    #------------------------------------------------------
+
+
+    #----------------------from self_play------------------
+#latest_policy_path = get_latest_policy_path(
+#    f"trained_models/self_play/{model_path}"
+#)
+    #------------------------------------------------------
+
 
 if not latest_policy_path:
     raise ValueError("No trained policy found!")
+#---------------------------------------------------------------------------------------------------------
 
 
-restored_policy_weights = Policy.from_checkpoint(latest_policy_path).get_weights()
+#------------------------OR manually chosen checkpoint to load model from - NOT needed if new model is trained----------------------
+  #checkpoint to load from
+#checkpoint = "checkpoint_5000"
+#latest_policy_path = "trained_models/self_play/" + model_path + f"/{checkpoint}" + "/policies/main"
+#---------------------------------------------------------------------------------------------------------
 
 # Configure the algorithm
 config = (
@@ -153,7 +201,8 @@ config = (
     .multi_agent(
         policies={
             "main": (None, obs_space[0], act_space[0], {"entropy_coeff": entropy_coeff}),
-            "policy_1": (RandomPolicy, obs_space[1], act_space[1], {"entropy_coeff": entropy_coeff}),
+            "policy_1": (RandomPolicy, obs_space[1], act_space[1], {"entropy_coeff": entropy_coeff}),  #choose policy to train against: eg RandomPolicy, or a smart Pre-Programmed policy (depending on the observation-scheme:
+                                                                                                                #PreProgrammedPolicyEfficientOneHot, PreProgrammedPolicyOneHot, PreProgrammedPolicySimple)
         },
         policy_mapping_fn=policy_mapping_fn,
         policies_to_train=["main"],
@@ -166,9 +215,14 @@ config = (
 
 algo = config.build()
 
+
+#----------------------load pre-trained model - NOT needed if new model is trained------------------------
+restored_policy_weights = Policy.from_checkpoint(latest_policy_path).get_weights()
 # Restore the latest policy
 print(restored_policy_weights)
-#algo.set_weights({"main": restored_policy_weights})
+algo.set_weights({"main": restored_policy_weights})
+#---------------------------------------------------------------------------------------------------------
+
 
 def convert_to_serializable(obj):
     """Convert non-serializable objects to serializable types."""
@@ -182,21 +236,39 @@ def convert_to_serializable(obj):
         return "error"
 
 # Training loop
-max_iters = 100000
-max_steps = 1e10
+max_iters = 100000   #adapt training iterations here
+max_steps = 1e10     #adapt number of total environment steps sampled here
 
+#safe configuration
+config_params = {
+        "observation_mode": observation_mode,
+        "observe_other_player_indirect": observe_other_player_indirect,
+        "vf_share_layers": vf_share_layers,
+        "curiosity_reward": curiosity_reward,
+        "action_reward_reduction": action_reward_reduction,
+        "action_reward_decay": action_reward_decay,
+        "entropy_coeff": entropy_coeff,
+        #"learning_rate": learning_rate,
+        "neural_network_size": neural_network_size,
+    }
+
+with open(f"logs/self_play/{safe_path}/experiment_config.json", "w") as f:
+    json.dump(config_params, f, indent=4, default=convert_to_serializable)
+    print("safed config")
+
+#TRAINING
 for iters in range(max_iters):
     result = algo.train()
     
     # Log results every iteration
     if iters % 1 == 0:
-        log_path = f"logs/self_play/{model_path}/result_iteration_{iters}.json"
+        log_path = f"logs/self_play/{safe_path}/result_iteration_{iters}.json"
         with open(log_path, "w") as f:
             json.dump(result, f, indent=4, default=convert_to_serializable)
     
     # Save checkpoint every 250 iterations
     if iters % 250 == 0:
-        checkpoint_dir = f"trained_models/self_play/{model_path}/checkpoint_{iters}"
+        checkpoint_dir = f"trained_models/self_play/{safe_path}/checkpoint_{iters}"
         os.makedirs(checkpoint_dir, exist_ok=True)
         algo.save(checkpoint_dir)
     
@@ -207,6 +279,6 @@ else:
     print(f"Training done, because max_iters {max_iters} reached")
 
 # Save final model
-final_dir = "trained_models/self_play/model_path/final"
+final_dir = f"trained_models/self_play/{safe_path}/final"
 os.makedirs(final_dir, exist_ok=True)
 algo.save(final_dir)
