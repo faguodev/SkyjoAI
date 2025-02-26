@@ -214,10 +214,11 @@ class SimpleSkyjoEnv(AECEnv):
         score_after = card_sum[current_agent] + self.score_per_unknown * n_hidden[current_agent]
 
         if not game_over:
-            # simple delta-based reward
+            # track undesirable actions - actions that worsen the score of the agent.
             if score_before - score_after <= 0:
                 self.infos[current_agent]["undesirable_action"] += 1
-
+            # simple delta-based reward
+            # plus additional reward for being curious sum is then multiplied with weight "action_reward_reduction"
             self.rewards[current_agent] = 0
             if curious:
                 self.rewards[current_agent] += self.curiosity_reward
@@ -225,7 +226,7 @@ class SimpleSkyjoEnv(AECEnv):
 
         # if the game is over, finalize
         else:
-            #if self.old_reward:
+            #calculate final reward:
             self.rewards = self._convert_to_dict(
                 self._calc_final_rewards(**(self.table.get_game_metrics()))
             )
@@ -237,10 +238,6 @@ class SimpleSkyjoEnv(AECEnv):
             for idx, agent_id in enumerate(self.agents):
                 self.infos[agent_id]["final_sum_of_revealed_cards"] = card_sums[idx]
                 self.infos[agent_id]["n_hidden_cards"] = n_hidden[idx]
-            
-                # TODO: If we first only pretrain and then only self-play then this might not be necessary.
-                # Otherwise, we still might need to adapt this due to floating point values introduced by
-                # reward decay. Perhaps rounding other rewards can be a solution.
 
             final_scores = [int(score) for score in self.table.get_game_metrics()["final_score"]]
             winner_ids = np.argwhere(final_scores == np.min(final_scores)).flatten().tolist()
