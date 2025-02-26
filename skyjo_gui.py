@@ -514,9 +514,9 @@ if __name__ == "__main__":
     #---------------------------define opponents-------------------------------------
     # Define player types: 'human' or an AI function
     player_types = [
-        pre_programmed_smart_policy_one_hot,
+        #pre_programmed_smart_policy_one_hot,
         #policy_zero,
-        #policy_one,
+        policy_one,
         'human',
     ]
     # Replace 'human' with random_admissible_policy to make all AI players
