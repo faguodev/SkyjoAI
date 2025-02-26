@@ -145,8 +145,6 @@ config = (
             main_policy_id=0,
             win_rate_threshold=0.65,
             action_reward_reduction=action_reward_reduction,
-            action_reward_decay=action_reward_decay,
-            curiosity_reward_after_first_run = curiosity_reward_after_first_run,
         )
     )
     .env_runners(num_env_runners=5)

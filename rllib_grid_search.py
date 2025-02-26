@@ -122,7 +122,6 @@ def train_model(
                 SkyjoLogging_and_SelfPlayCallbacks,
                 main_policy_id=0,
                 win_rate_threshold=0.8,
-                action_reward_reduction=action_reward_reduction, # Search
             )
         )
         #.callbacks(RewardDecayCallback)

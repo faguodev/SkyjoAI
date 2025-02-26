@@ -6,23 +6,18 @@ class RewardDecay_Callback(DefaultCallbacks):
     def on_train_result(self, *, algorithm, result, **kwargs):
         # Decay the reward scaling factor over training iterations
         action_reward_reduction = max(0.05, 1.0 - result["training_iteration"] * 0.005)
-        # env = algorithm.workers.local_worker().env
-        # env = algorithm.workers.local_env_runner.env
         algorithm.config.env_config["action_reward_reduction"] = action_reward_reduction
-        #logger.info(action_reward_reduction)
 
 class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
 
-    def __init__(self, main_policy_id, win_rate_threshold, action_reward_reduction, curiosity_reward_after_first_run = 0):
+    def __init__(self, main_policy_id, win_rate_threshold):
         super().__init__()
         # 0=RandomPolicy, 1=1st main policy snapshot,
         # 2=2nd main policy snapshot, etc..
         self.current_opponent = 0
         self.winning_policy = []
         self.win_rate_threshold = win_rate_threshold
-        self.action_reward_reduction = action_reward_reduction
         self.main_policy_id = main_policy_id
-        self.curiosity_reward_after_first_run = curiosity_reward_after_first_run
 
     def on_episode_end(        
         self,
@@ -72,7 +67,6 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
                     episode.hist_data[metric_name] = []
                 episode.hist_data[metric_name].append(info["action_reward_reduction"])
 
-                #episode.custom_metrics["winning_policy"].append([episode.policy_for(id) for id in info["winner_ids"]])
                 
     def on_train_result(
         self,
@@ -152,9 +146,7 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
             # We need to sync the just copied local weights (from main policy)
             # to all the remote workers as well.
             algorithm.env_runner_group.sync_weights()
-            algorithm.config.env_config['reward_config']["curiosity_reward"] = self.curiosity_reward_after_first_run
 
-            algorithm.config.env_config['reward_config']['action_reward_reduction'] = self.action_reward_reduction
         else:
             print("not good enough; will keep learning ...")
 
@@ -162,5 +154,4 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
         result["league_size"] = self.current_opponent + 3
         self.n_main_policy_win = 0
 
-        #print(f"Matchups:\n{self._matching_stats}")
 
