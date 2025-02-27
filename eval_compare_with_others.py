@@ -22,8 +22,8 @@ global_turn_count = 0
 
 #region Ours
 # Load configuration
-model_path = "obs_simple_indirect_True_vf_True_cr_5_ar_1_decay_0.98_ent_0.03_nn_[256, 256]"
-checkpoint = "checkpoint_8500"
+model_path = "obs_simple_port_to_other_indirect_False_vf_True_cr_0_ar_5_fixed_decay_0.98_ent_0.01_nn_[64, 64]_against_other"
+checkpoint = "checkpoint_10000"
 step = "self_play"
 config_path = f"logs/{step}/{model_path}/experiment_config.json"
 
@@ -88,8 +88,6 @@ config = (
             SkyjoLogging_and_SelfPlayCallbacks,
             main_policy_id=0,
             win_rate_threshold=0.65,
-            action_reward_reduction=action_reward_reduction,
-            action_reward_decay=action_reward_decay,
         )
     )
     #.env_runners(num_env_runners=5)
@@ -117,7 +115,6 @@ final_dir = model_save_dir + f"/{checkpoint}"
 algo.restore(final_dir)
 #endregion
 
-#region Theirs
 ##############################
 # LOAD SB3 MODEL
 ##############################
@@ -125,10 +122,13 @@ algo.restore(final_dir)
 sb3_model_path = "custom_models/PPO_1M_multi.zip"
 model_env2 = PPO.load(sb3_model_path)
 
+#region Theirs (simple)
+
 ##############################
 # OBSERVATION MAPPING
 ##############################
-def obs_one_to_obs_two(obs_one: dict, turn_counter: int) -> np.ndarray:
+
+def obs_one_to_obs_two_simple(obs_one: dict, turn_counter: int) -> np.ndarray:
     """
     Convert Environment One observation dict into an Environment Two–style observation.
 
@@ -187,7 +187,7 @@ def obs_one_to_obs_two(obs_one: dict, turn_counter: int) -> np.ndarray:
 ##############################
 # ACTION MAPPING
 ##############################
-def act_two_to_act_one(action_two: np.ndarray, expected_action: str, obs_one: dict) -> int:
+def act_two_to_act_one_simple(action_two: np.ndarray, expected_action: str, obs_one: dict) -> int:
     """
     Convert the (2,) action from environment Two to a single integer action for environment One.
 
@@ -238,7 +238,8 @@ def act_two_to_act_one(action_two: np.ndarray, expected_action: str, obs_one: di
 ##############################
 # POLICY FUNCTION
 ##############################
-def sb3_policy_env2(obs_one: dict, game) -> int:
+
+def sb3_policy_env2_simple(obs_one: dict, game) -> int:
     """
     Policy function integrating the SB3 model from environment Two into environment One.
 
@@ -249,11 +250,155 @@ def sb3_policy_env2(obs_one: dict, game) -> int:
     """
     global global_turn_count
 
-    obs_env2 = obs_one_to_obs_two(obs_one, global_turn_count)
+    obs_env2 = obs_one_to_obs_two_simple(obs_one, global_turn_count)
     action_two, _ = model_env2.predict(obs_env2, deterministic=True)
 
     next_action = game.get_expected_action()[1]  # "draw" or "place"
-    action_one = act_two_to_act_one(action_two, next_action, obs_one)
+    action_one = act_two_to_act_one_simple(action_two, next_action, obs_one)
+    return action_one
+
+#endregion
+
+#region Theirs (simple_port_to_other)
+
+##############################
+# OBSERVATION MAPPING
+##############################
+
+def obs_one_to_obs_two_simple_port_to_other(obs_one: np.ndarray) -> np.ndarray:
+    """
+    Convert Environment One observation dict into an Environment Two–style observation.
+
+    For a 2-player game in Environment One (PettingZoo):
+      obs_one["observations"] might have length 43:
+        - Indices:
+          3 -> discard_top
+          4 -> deck_card
+          19..31 -> 12 cards for player0
+          31..43 -> 12 cards for player1
+
+    We’ll build a single array of length 27:
+      [discard_top, turn_counter, deck_card, 12 board vals (player0), 12 board vals (player1)]
+
+    Hidden/refunded cards = 15 or -14 => we turn them into 5.0 for environment Two.
+    """
+    turn_counter = obs_one[0]
+    obs_vec = obs_one[2:]
+    discard_top = obs_vec[17]
+    deck_card   = obs_vec[18]
+
+    # Grab the 12 cards for player0
+    raw_board_p0 = obs_vec[19:31]
+    board_int_p0 = []
+    for val in raw_board_p0:
+        if val == 15:
+            board_int_p0.append(5.0)
+        
+        elif val == -14:  # Hidden/refunded
+            board_int_p0.append(0.0)
+        else:
+            board_int_p0.append(float(val))
+
+    # Grab the 12 cards for player1
+    raw_board_p1 = obs_vec[31:43]
+    board_int_p1 = []
+    for val in raw_board_p1:
+        if val == 15 or val == -14:
+            board_int_p1.append(5.0)
+        else:
+            board_int_p1.append(float(val))
+
+    state = float(turn_counter)
+
+    obs_env2 = np.concatenate((
+        np.array([discard_top, state, deck_card], dtype=np.float32),
+        np.array(board_int_p0, dtype=np.float32),
+        np.array(board_int_p1, dtype=np.float32),
+    ))
+
+    #print("obs_env")
+    #print(obs_env2)
+
+    return obs_env2
+
+
+##############################
+# ACTION MAPPING
+##############################
+
+def act_two_to_act_one_simple_port_to_other(action_two: np.ndarray, expected_action: str, action_mask) -> int:
+    """
+    Convert the (2,) action from environment Two to a single integer action for environment One.
+
+    action_two[0]: 0=draw from deck, 1=take from discard
+    action_two[1]: 0..11=place at position, 12=discard & reveal
+
+    Environment One action mapping:
+    - expected_action="draw": 
+        if draw_or_take=0 -> 24 (draw from deck)
+        if draw_or_take=1 -> 25 (take from discard)
+    - expected_action="place":
+        if place_or_discover<12 -> place that position (0..11)
+        if place_or_discover=12 -> reveal a random masked card:
+            valid reveal actions are 12..23, filtered by action_mask.
+    """
+    draw_or_take = action_two[0]
+    place_or_discover = action_two[1]
+
+    if expected_action == 0:
+        # Draw step
+        if draw_or_take == 0:
+            return 24  # draw from draw pile
+        else:
+            return 25  # take from discard pile
+
+    elif expected_action == 1:
+
+        # Place step
+        if place_or_discover < 12:
+            # place hand card onto that position
+            if action_mask[place_or_discover]:
+                return place_or_discover
+            else:
+                return place_or_discover
+        else:
+            # Need to reveal a card: pick a random masked card action from 12..23
+            reveal_actions = [a for a in range(12, 24) if action_mask[a] == 1]
+            if len(reveal_actions) == 0:
+                # fallback if none available (should not happen)
+                return random.choice([a for a in range(0, 12) if action_mask[a] == 1])
+            else:
+                action = random.choice(reveal_actions)
+                if not action_mask[action]:
+                    return random.choice([a for a in range(0, 12) if action_mask[a] == 1])
+                return action
+
+    # fallback
+    return 24
+
+
+##############################
+# POLICY FUNCTION
+##############################
+
+def sb3_policy_env2_simple_port_to_other(obs_one: dict, game) -> int:
+    """
+    Policy function integrating the SB3 model from environment Two into environment One.
+
+    Steps:
+       1) Convert PettingZoo obs -> env2 obs (with turn count)
+       2) model.predict(obs_env2)
+       3) convert env2 action -> env1 action
+    """
+
+    action_mask = obs_one["action_mask"]
+    observation = obs_one["observations"]
+
+    obs_env2 = obs_one_to_obs_two_simple_port_to_other(observation)
+    action_two, _ = model_env2.predict(obs_env2, deterministic=True)
+
+    next_action = observation[1]  # "draw" or "place"
+    action_one = act_two_to_act_one_simple_port_to_other(action_two, next_action, action_mask)
     return action_one
 
 #endregion
@@ -334,7 +479,7 @@ while i_episode <= 1000:
     game = SkyjoGame(
         num_players=2, 
         observe_other_player_indirect=False,
-        observation_mode="simple"    
+        observation_mode=observation_mode,    
     )
     i_episode += 1
     global_turn_count = 0
@@ -358,7 +503,7 @@ while i_episode <= 1000:
 
             if observe_other_player_indirect:
                 observation = {
-                    "observations": obs[:31],
+                    "observations": obs, #INFO Might need to change this
                     "action_mask": mask
                 }
             else:
@@ -377,7 +522,10 @@ while i_episode <= 1000:
                 "observations": obs,
                 "action_mask": mask
             }
-            action = sb3_policy_env2(observation, game)
+            if observation_mode == "simple_port_to_other":
+                action = sb3_policy_env2_simple_port_to_other(observation, game)
+            elif observation_mode == "simple":
+                action = sb3_policy_env2_simple(observation, game)
 
             # action = pre_programmed_smart_policy(obs, mask)
             
