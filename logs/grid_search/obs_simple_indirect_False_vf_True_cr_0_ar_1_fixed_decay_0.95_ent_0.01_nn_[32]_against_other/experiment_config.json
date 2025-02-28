@@ -1,0 +1,12 @@
+{
+    "observation_mode": "simple",
+    "observe_other_player_indirect": false,
+    "vf_share_layers": true,
+    "curiosity_reward": 0,
+    "action_reward_reduction": 1,
+    "action_reward_decay": 0.95,
+    "entropy_coeff": 0.01,
+    "neural_network_size": [
+        32
+    ]
+}
