@@ -17,9 +17,9 @@ Welcome to the SkyjoAI repository! This repository contains our implementation o
 - **`skyjo_gui.py`**, **`skyjo_gui_compare_with_others.py`**: Play a game of Skyjo against trained models.
 
 ## Installation
-To use this repository, first install all dependencies listed in `requirements.txt`:
+To use this repository, first install all dependencies listed in `environment.yml`:
 ```bash
-pip install -r requirements.txt
+conda env create -f environment.yml
 ```
 
 ## How to Play
