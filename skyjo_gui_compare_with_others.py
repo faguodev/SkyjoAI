@@ -4,9 +4,6 @@ from functools import partial
 import random
 from environment.skyjo_game import SkyjoGame
 
-from environment.skyjo_env import env as skyjo_env
-import logging
-
 import numpy as np
 from stable_baselines3 import PPO
 

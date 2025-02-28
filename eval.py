@@ -24,8 +24,8 @@ if __name__ == "__main__":
     logger.setLevel(logging.INFO)
 
     # Load configuration
-    model_path = "obs_efficient_one_hot_port_to_other_indirect_False_vf_True_cr_2_ar_1_decay_0.995_ent_0.01_nn_[64, 64]_against_other2"
-    checkpoint = "checkpoint_1250"
+    model_path = "obs_simple_port_to_other_indirect_False_vf_True_cr_0_ar_5_fixed_decay_0.98_ent_0.01_nn_[64, 64]_against_other"
+    checkpoint = "checkpoint_2750"
     config_path = f"logs/grid_search/{model_path}/experiment_config.json"
 
     with open(config_path, "r") as f:
@@ -89,8 +89,6 @@ if __name__ == "__main__":
                 SkyjoLogging_and_SelfPlayCallbacks,
                 main_policy_id=0,
                 win_rate_threshold=0.65,
-                action_reward_reduction=action_reward_reduction,
-                action_reward_decay=action_reward_decay,
             )
         )
         .env_runners(num_env_runners=5)
@@ -132,7 +130,6 @@ if __name__ == "__main__":
         action_mask
     ):
         observation = observation[2:]
-        #print(observation)
         action = 26
         admissible_actions = [i for i, mask in enumerate(action_mask) if mask == 1]
         #check wether card still has to be taken from discard pile or draw pile
@@ -147,19 +144,14 @@ if __name__ == "__main__":
         #if card was already taken from deck/discard pile continue with placing/throwing away
         else:
             #go through one-hot-encoded hand cards to find value of hand card
-            # for i, hand in enumerate(observation[34:50]):
-            #     if hand == 1:
             hand_card_value = observation[18]
             #find position and highest value of players cards (here unknown cards are valued as 5)
             max_card_value = -2
             masked_cards = []
             for i in range(12):
                 idx_start = i+19
-                #print("starting idx:",idx_start)
-                #print("observation looping through: ", observation[idx_start:idx_start+16])
                 #find value of current card (17th one-hot-encoded field is for refunded cards and therefore ignored)
-                if observation[idx_start+12] == 1:
-                    assert observation[idx_start] == 5, ("One hot unknown does not relate to true unknown")
+                if observation[idx_start] == 5:
                     masked_cards.append(i)
                     #print(f"appending {i}")
                     if max_card_value < 5:
@@ -168,7 +160,6 @@ if __name__ == "__main__":
                 elif max_card_value < observation[idx_start]:
                     max_card_value = observation[idx_start]
                     imax = i
-            #print(masked_cards)
             #1st case hand card value is lower equal than 3 (if card was taken from discard this branch will be taken for 100%)
             #place card on position with max_card_value
             if hand_card_value <= 3:
@@ -182,7 +173,6 @@ if __name__ == "__main__":
                 for a in admissible_actions:
                     if a in np.array(masked_cards) + 12:
                         action = a
-                #print(action, "chosen action - observation: ", observation[(51 + (action-12)*17):(68 + (action-12)*17)])
             assert action != 26, ("No Valid action was chosen!")
         return action
 
@@ -198,14 +188,7 @@ if __name__ == "__main__":
         i_episode += 1
         env_pettingzoo.reset()
         for i, agent in enumerate(env_pettingzoo.agent_iter(max_iter=6000)):
-            # get observation (state) for current agent:
-            #print(f"\n\n\n\n\n===================== Iteration {i} =====================")
             obs, reward, term, trunc, info = env_pettingzoo.last()
-
-
-            #print(f"{term = }, {trunc = }")
-
-            #print(env_pettingzoo.render())
 
             # store current state
             observation = obs["observations"]
@@ -218,30 +201,15 @@ if __name__ == "__main__":
                 action = action_exploration_policy
             elif agent == 1:
                 # 
-                #action = random_admissible_policy(observation, action_mask)
                 action = preprogrammed_policy_simple_port_to_other(observation, action_mask)
-            # elif agent == 2:
-            #     policy = algo.get_policy(policy_id=policy_mapping_fn(1, None, None))
-            #     action_exploration_policy, _, action_info = policy.compute_single_action(obs)
-            #     # 
-            #     action = action_exploration_policy
 
-                #action = random_admissible_policy(observation, action_mask)
-
-            #print(f"{action_mask = }")
-            #print(f"sampled action {agent}: {action}")
             env_pettingzoo.step(action)
             if term:
                 env_pettingzoo.step(None)
-                #print('done', reward)
                 final_scores = env_pettingzoo.table.get_game_metrics()["final_score"]
-                #print(env_pettingzoo.table.get_game_metrics())
 
                 winner = np.argmin(final_scores)
 
-                #print("========================")
-                #print("AND THE WINNER IS")
-                #print(winner)
                 wins_dict[winner] = wins_dict[winner] + 1
                 break
         if i_episode % 500 == 0:

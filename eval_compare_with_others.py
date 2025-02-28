@@ -23,8 +23,8 @@ global_turn_count = 0
 #region Ours
 # Load configuration
 model_path = "obs_simple_port_to_other_indirect_False_vf_True_cr_0_ar_5_fixed_decay_0.98_ent_0.01_nn_[64, 64]_against_other"
-checkpoint = "checkpoint_10000"
-step = "self_play"
+checkpoint = "checkpoint_2750"
+step = "grid_search"
 config_path = f"logs/{step}/{model_path}/experiment_config.json"
 
 with open(config_path, "r") as f:
@@ -90,8 +90,6 @@ config = (
             win_rate_threshold=0.65,
         )
     )
-    #.env_runners(num_env_runners=5)
-    #.rollouts(num_rollout_workers=5, num_envs_per_worker=1)
     .resources(num_gpus=1)
     .multi_agent(
         policies={
@@ -426,16 +424,12 @@ def pre_programmed_smart_policy_simple(obs):
     #if card was already taken from deck/discard pile continue with placing/throwing away
     else:
         #go through one-hot-encoded hand cards to find value of hand card
-        # for i, hand in enumerate(observation[34:50]):
-        #     if hand == 1:
         hand_card_value = observation[18]
         #find position and highest value of players cards (here unknown cards are valued as 5)
         max_card_value = -2
         masked_cards = []
         for i in range(12):
             idx_start = i+19
-            #print("starting idx:",idx_start)
-            #print("observation looping through: ", observation[idx_start:idx_start+16])
             #find value of current card (17th one-hot-encoded field is for refunded cards and therefore ignored)
             if observation[idx_start] == 5:
                 masked_cards.append(i)
@@ -446,7 +440,6 @@ def pre_programmed_smart_policy_simple(obs):
             elif max_card_value < observation[idx_start]:
                 max_card_value = observation[idx_start]
                 imax = i
-        #print(masked_cards)
         #1st case hand card value is lower equal than 3 (if card was taken from discard this branch will be taken for 100%)
         #place card on position with max_card_value
         if hand_card_value <= 3:
@@ -511,8 +504,6 @@ while i_episode <= 1000:
                     "observations": obs,
                     "action_mask": mask
                 }
-            # action = pre_programmed_smart_policy(observation)
-            
             policy = algo.get_policy(policy_id=policy_mapping_fn(agent, None, None))
             action_exploration_policy, _, action_info = policy.compute_single_action(observation)
             # 
@@ -526,8 +517,6 @@ while i_episode <= 1000:
                 action = sb3_policy_env2_simple_port_to_other(observation, game)
             elif observation_mode == "simple":
                 action = sb3_policy_env2_simple(observation, game)
-
-            # action = pre_programmed_smart_policy(obs, mask)
             
         # Execute action
         try:
@@ -553,8 +542,6 @@ while i_episode <= 1000:
             np.array(game.discard_pile, dtype=game.players_cards.dtype),
             count_players_cards=not game.observe_other_player_indirect,
         )
-        print(n_hidden)
-        print(cards_sum)
         winner = scores.index(min(scores))
         wins_dict[winner] += 1
     else:
