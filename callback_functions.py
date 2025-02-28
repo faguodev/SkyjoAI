@@ -77,11 +77,6 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
         **kwargs,
         ):
 
-        #for p_id in self.playing_polices:
-        #    print("Policies playing: ", p_id)
-
-        
-        #opponent_rew_2 = result[ENV_RUNNER_RESULTS]["hist_stats"].pop(f"policy_{self.playing_polices[2]}_reward")
         main_rew = result[ENV_RUNNER_RESULTS]["hist_stats"]["policy_main_reward"] #.pop("policy_main_reward")
 
         # INFO: This only works with old rewards... 

@@ -175,7 +175,7 @@ class SimpleSkyjoEnv(AECEnv):
         """
         
         obs, action_mask = self.table.collect_observation(
-            agent #self._name_to_player_id(agent)
+            agent
         )
         return {"observations": obs, "action_mask": action_mask}
 

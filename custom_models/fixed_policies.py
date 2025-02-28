@@ -49,8 +49,6 @@ class PreProgrammedPolicySimple(Policy):
         action_mask = obs[0][:26] #["action_mask"]
         observation = obs[0][26:] #["observations"]
         action = 26
-        #print(observation[19:])
-        #print(observation)
         admissible_actions = [i for i, mask in enumerate(action_mask) if mask == 1]
         #check wether card still has to be taken from discard pile or draw pile
         if 24 in admissible_actions:
@@ -64,27 +62,21 @@ class PreProgrammedPolicySimple(Policy):
         #if card was already taken from deck/discard pile continue with placing/throwing away
         else:
             #go through one-hot-encoded hand cards to find value of hand card
-            # for i, hand in enumerate(observation[34:50]):
-            #     if hand == 1:
             hand_card_value = observation[18]
             #find position and highest value of players cards (here unknown cards are valued as 5)
             max_card_value = -2
             masked_cards = []
             for i in range(12):
                 idx_start = i+19
-                #print("starting idx:",idx_start)
-                #print("observation looping through: ", observation[idx_start:idx_start+16])
                 #find value of current card (17th one-hot-encoded field is for refunded cards and therefore ignored)
                 if observation[idx_start] == 5:
                     masked_cards.append(i)
-                    #print(f"appending {i}")
                     if max_card_value < 5:
                         max_card_value = 5
                         imax = i
                 elif max_card_value < observation[idx_start]:
                     max_card_value = observation[idx_start]
                     imax = i
-            #print(masked_cards)
             #1st case hand card value is lower equal than 3 (if card was taken from discard this branch will be taken for 100%)
             #place card on position with max_card_value
             if hand_card_value <= 3:
@@ -98,7 +90,6 @@ class PreProgrammedPolicySimple(Policy):
                 for a in admissible_actions:
                     if a in np.array(masked_cards) + 12:
                         action = a
-                #print(action, "chosen action - observation: ", observation[(51 + (action-12)*17):(68 + (action-12)*17)])
             assert action != 26, ("No Valid action was chosen!")
         return np.asarray([action]), [], {}
     def learn_on_batch(self, samples):
@@ -121,9 +112,8 @@ class PreProgrammedPolicyOneHot(Policy):
         timestep,
         **kwargs,
     ):
-        action_mask = obs[0][:26] #["action_mask"]
-        observation = obs[0][26:] #["observations"]
-
+        action_mask = obs[0][:26]
+        observation = obs[0][26:]
         action = 26
         admissible_actions = [i for i, mask in enumerate(action_mask) if mask == 1]
         #check wether card still has to be taken from discard pile or draw pile
@@ -146,21 +136,17 @@ class PreProgrammedPolicyOneHot(Policy):
             masked_cards = []
             for i in range(12):
                 idx_start = i*17+51
-                #print("starting idx:",idx_start)
-                #print("observation looping through: ", observation[idx_start:idx_start+16])
                 #find value of current card (17th one-hot-encoded field is for refunded cards and therefore ignored)
                 for j, val in enumerate(observation[idx_start:idx_start+16]):
                     if val == 1:
                         if j == 15:
                             masked_cards.append(i)
-                            #print(f"appending {i}")
                             if max_card_value < 5:
                                 max_card_value = 5
                                 imax = i
                         elif max_card_value < j - 2:
                             max_card_value = j-2
                             imax = i
-            #print(masked_cards)
             #1st case hand card value is lower equal than 3 (if card was taken from discard this branch will be taken for 100%)
             #place card on position with max_card_value
             if hand_card_value <= 3:
@@ -174,7 +160,6 @@ class PreProgrammedPolicyOneHot(Policy):
                 for a in admissible_actions:
                     if a in np.array(masked_cards) + 12:
                         action = a
-                #print(action, "chosen action - observation: ", observation[(51 + (action-12)*17):(68 + (action-12)*17)])
             assert action != 26, ("No Valid action was chosen!")
         return np.asarray([action]), [], {}
     def learn_on_batch(self, samples):
@@ -212,10 +197,8 @@ class SingleAgentPolicy(Policy):
         2) model.predict(obs_env2)
         3) convert env2 action -> env1 action
         """
-        action_mask = obs[0][:26] #["action_mask"]
-        observation = obs[0][26:] #["observations"]
-
-        #print(type(observation))
+        action_mask = obs[0][:26]
+        observation = obs[0][26:]
 
         obs_env2 = self._obs_one_to_obs_two(observation)
         action_two, _ = self.model_env2.predict(obs_env2, deterministic=True)
@@ -223,7 +206,6 @@ class SingleAgentPolicy(Policy):
         next_action = observation[1]  # "draw" or "place"
         action_one = self._act_two_to_act_one(action_two, next_action, action_mask)
 
-        #print(action_one)
         return np.asarray([action_one]), [], {}
 
     ##############################
@@ -279,9 +261,6 @@ class SingleAgentPolicy(Policy):
             np.array(board_int_p0, dtype=np.float32),
             np.array(board_int_p1, dtype=np.float32),
         ))
-
-        #print("obs_env")
-        #print(obs_env2)
 
         return obs_env2
 
@@ -376,10 +355,8 @@ class EfficientSingleAgentPolicy(Policy):
         2) model.predict(obs_env2)
         3) convert env2 action -> env1 action
         """
-        action_mask = obs[0][:26] #["action_mask"]
-        observation = obs[0][26:] #["observations"]
-
-        #print(type(observation))
+        action_mask = obs[0][:26]
+        observation = obs[0][26:]
 
         obs_env2 = self._obs_one_to_obs_two(observation)
         action_two, _ = self.model_env2.predict(obs_env2, deterministic=True)
@@ -387,7 +364,6 @@ class EfficientSingleAgentPolicy(Policy):
         next_action = observation[1]  # "draw" or "place"
         action_one = self._act_two_to_act_one(action_two, next_action, action_mask)
 
-        #print(action_one)
         return np.asarray([action_one]), [], {}
 
     ##############################
@@ -443,9 +419,6 @@ class EfficientSingleAgentPolicy(Policy):
             np.array(board_int_p0, dtype=np.float32),
             np.array(board_int_p1, dtype=np.float32),
         ))
-
-        #print("obs_env")
-        #print(obs_env2)
 
         return obs_env2
 
@@ -526,11 +499,10 @@ class PreProgrammedPolicyEfficientOneHot(Policy):
     ):
         
         
-        action_mask = obs[0][:26] #["action_mask"]
-        observation = obs[0][26:] #["observations"]
+        action_mask = obs[0][:26]
+        observation = obs[0][26:]
+
         action = 26
-        #print(observation[19:])
-        #print(observation)
         admissible_actions = [i for i, mask in enumerate(action_mask) if mask == 1]
         #check wether card still has to be taken from discard pile or draw pile
         if 24 in admissible_actions:
@@ -544,28 +516,22 @@ class PreProgrammedPolicyEfficientOneHot(Policy):
         #if card was already taken from deck/discard pile continue with placing/throwing away
         else:
             #go through one-hot-encoded hand cards to find value of hand card
-            # for i, hand in enumerate(observation[34:50]):
-            #     if hand == 1:
             hand_card_value = observation[18]
             #find position and highest value of players cards (here unknown cards are valued as 5)
             max_card_value = -2
             masked_cards = []
             for i in range(12):
                 idx_start = i+19
-                #print("starting idx:",idx_start)
-                #print("observation looping through: ", observation[idx_start:idx_start+16])
                 #find value of current card (17th one-hot-encoded field is for refunded cards and therefore ignored)
                 if observation[idx_start+12] == 1:
                     assert observation[idx_start] == 5, ("One hot unknown does not relate to true unknown")
                     masked_cards.append(i)
-                    #print(f"appending {i}")
                     if max_card_value < 5:
                         max_card_value = 5
                         imax = i
                 elif max_card_value < observation[idx_start]:
                     max_card_value = observation[idx_start]
                     imax = i
-            #print(masked_cards)
             #1st case hand card value is lower equal than 3 (if card was taken from discard this branch will be taken for 100%)
             #place card on position with max_card_value
             if hand_card_value <= 3:
