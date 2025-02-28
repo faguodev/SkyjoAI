@@ -77,8 +77,8 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # Load configuration
-model_path = "obs_simple_indirect_True_vf_True_cr_0_ar_1_decay_1_ent_0.03_nn_[128]"
-checkpoint = "final"
+model_path = "obs_simple_port_to_other_indirect_False_vf_True_cr_0_ar_5_fixed_decay_0.98_ent_0.01_nn_[64, 64]_against_other"
+checkpoint = "checkpoint_2750"
 #------------------------Load config from model to play against------------------------
 config_path = f"logs/grid_search/{model_path}/experiment_config.json"
 
@@ -96,15 +96,15 @@ entropy_coeff = config["entropy_coeff"]
 neural_network_size = config["neural_network_size"]
 #---------------------------------------------------------------------------------------
 #------------------------if no file "experiment_config.json" is available manually adapt the config------------------------
-observation_mode = "simple"
-observe_other_player_indirect = True
-vf_share_layers = True
-neural_network_size = [128]
-#these do not need to be changed
-curiosity_reward = 0
-action_reward_reduction = 0
-action_reward_decay = 0
-entropy_coeff = 0.03
+# observation_mode = "simple"
+# observe_other_player_indirect = True
+# vf_share_layers = True
+# neural_network_size = [128]
+# #these do not need to be changed
+# curiosity_reward = 0
+# action_reward_reduction = 0
+# action_reward_decay = 0
+# entropy_coeff = 0.03
 #---------------------------------------------------------------------------------------
 
 # Environment configuration
@@ -155,7 +155,6 @@ config = (
             SkyjoLogging_and_SelfPlayCallbacks,
             main_policy_id=0,
             win_rate_threshold=0.65,
-            action_reward_reduction=action_reward_reduction,
         )
     )
     .env_runners(num_env_runners=5)
@@ -178,13 +177,13 @@ config = (
 algo = config.build()
 
 #----------------load model from grid_search----------------------
-#model_save_dir = f"trained_models/grid_search/{model_path}"
-#final_dir = model_save_dir + f"/{checkpoint}"
+model_save_dir = f"trained_models/grid_search/{model_path}"
+final_dir = model_save_dir + f"/{checkpoint}"
 #-----------------------------------------------------------------
 
 #----------------load model from self_play----------------------
-model_save_dir = f"trained_models/self_play/{model_path}"
-final_dir = model_save_dir + f"/{checkpoint}"
+# model_save_dir = f"trained_models/self_play/{model_path}"
+# final_dir = model_save_dir + f"/{checkpoint}"
 #-----------------------------------------------------------------
 
 algo.restore(final_dir)
@@ -515,9 +514,9 @@ if __name__ == "__main__":
     # Define player types: 'human' or an AI function
     player_types = [
         #pre_programmed_smart_policy_one_hot,
-        #policy_zero,
-        policy_one,
+        policy_zero,
+        #policy_one,
         'human',
     ]
     # Replace 'human' with random_admissible_policy to make all AI players
-    gui = SkyjoGUI(num_players=2, player_types=player_types, observe_other_players_indirect=True, observation_mode="onehot")
+    gui = SkyjoGUI(num_players=2, player_types=player_types, observe_other_players_indirect=observe_other_player_indirect, observation_mode=observation_mode)
