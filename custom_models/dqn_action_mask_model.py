@@ -6,12 +6,12 @@ from ray.rllib.models.torch.fcnet import FullyConnectedNetwork as TorchFC
 from ray.rllib.models.torch.torch_modelv2 import TorchModelV2
 from ray.rllib.utils.framework import try_import_torch
 from ray.rllib.utils.torch_utils import FLOAT_MIN
-import numpy as np
+from ray.rllib.utils.annotations import override
 
 torch, nn = try_import_torch()
 
 
-class DQNActionMaskModel(TorchModelV2, nn.Module):
+class DQNActionMaskModel(DQNTorchModel, TorchModelV2, nn.Module):
     """
     DQN model with action masking support.
     """
@@ -27,8 +27,9 @@ class DQNActionMaskModel(TorchModelV2, nn.Module):
         # with open(f"/home/henry/Documents/SharedDocuments/Uni/TU/3.Semester/AdvRL/SkyjoAI/file{time.time()}.txt", "w") as f:
             # f.write("Init")
 
-        TorchModelV2.__init__(self, obs_space, action_space, num_outputs, model_config, name, **kwargs)
+        TorchModelV2.__init__(self, obs_space, action_space, num_outputs, model_config, name)
         nn.Module.__init__(self)
+        DQNTorchModel.__init__(self, obs_space, action_space, num_outputs, model_config, name, **kwargs)
 
         self.num_actions = action_space.n
         assert num_outputs == self.num_actions, f"Expected num_outputs={self.num_actions}, got {num_outputs}"
@@ -65,10 +66,11 @@ class DQNActionMaskModel(TorchModelV2, nn.Module):
         # print(self.internal_model({'obs': input_dict['obs']['observations']}))
         # print(f"{action_mask=}")
 
-        inf_mask = torch.clamp(torch.log(action_mask), min=FLOAT_MIN*0.1)
+        inf_mask = torch.clamp(torch.log(action_mask), min=FLOAT_MIN*1e-1)
         masked_q_values = q_values + inf_mask
         # print(f"{inf_mask=}")
-        # print(f"{masked_q_values=}")
+        # print(input_dict["obs"])
+        print(f"{masked_q_values=}")
         print(f"Probabilities: {torch.softmax(masked_q_values, dim=-1)}")
 
         return masked_q_values, state
@@ -76,3 +78,8 @@ class DQNActionMaskModel(TorchModelV2, nn.Module):
     def get_q_values(self, input_dict):
         q_values, _ = self.q_network({"obs": input_dict["obs"]["observations"]})
         return q_values
+
+    @override(DQNTorchModel)
+    def get_q_value_distributions(self, model_out):
+        print("DQNActionMaskModel, get_q_value_distributions")
+        return model_out, model_out, model_out

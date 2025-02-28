@@ -173,6 +173,7 @@ def train_model(
 
     for iters in range(max_iters):
         result = algo.train()
+        algo.env_runner_group.foreach_env(lambda env: env.env.update_action_reward_reduction(0.7))
 
         # Can be adjusted as needed
         if iters % 1 == 0:

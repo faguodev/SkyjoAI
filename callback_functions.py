@@ -1,6 +1,16 @@
+from typing import Union, Optional, Dict
+
+import gymnasium as gym
 import numpy as np
+from ray.rllib import BaseEnv, Policy
 from ray.rllib.algorithms.callbacks import DefaultCallbacks
+from ray.rllib.core.rl_module import RLModule
+from ray.rllib.evaluation import Episode
+from ray.rllib.evaluation.episode_v2 import EpisodeV2
 from ray.rllib.utils.metrics import (ENV_RUNNER_RESULTS)
+from ray.rllib.utils.metrics.metrics_logger import MetricsLogger
+from ray.rllib.utils.typing import EpisodeType, PolicyID
+
 
 class RewardDecay_Callback(DefaultCallbacks):
     def on_train_result(self, *, algorithm, result, **kwargs):
@@ -67,9 +77,29 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
                 if metric_name not in episode.hist_data:
                     episode.hist_data[metric_name] = []
                 episode.hist_data[metric_name].append(info["final_score"])
+            if "action_reward_reduction" in info:
+                metric_name = f"action_reward_reduction_{agent_id}"
+                if metric_name not in episode.hist_data:
+                    episode.hist_data[metric_name] = []
+                episode.hist_data[metric_name].append(info["action_reward_reduction"])
 
                 #episode.custom_metrics["winning_policy"].append([episode.policy_for(id) for id in info["winner_ids"]])
-                
+    def on_algorithm_init(
+        self,
+        *,
+        algorithm,
+        metrics_logger: Optional[MetricsLogger] = None,
+        **kwargs,
+    ) -> None:
+
+        def update_env(env):
+            print("Updating env")
+            env.action_reward_reduction = self.action_reward_reduction
+            print(env.action_reward_reduction)
+
+        # print("Type:", type(algorithm.env_runner_group))
+        algorithm.env_runner_group.foreach_worker(lambda worker: worker.foreach_env(update_env))
+
     def on_train_result(
         self,
         *,
@@ -107,8 +137,30 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
 
         print(f"Iter={algorithm.iteration} win-rate={win_rate:3f}, reward_reduction={algorithm.config.env_config['reward_config']['action_reward_reduction']:3f} -> ", end="")
 
-        action_reward_reduction = max(0, algorithm.config.env_config['reward_config']["action_reward_reduction"] * self.action_reward_decay)
-        algorithm.config.env_config['reward_config']["action_reward_reduction"] = action_reward_reduction
+
+        algorithm.config.env_config['reward_config']["action_reward_reduction"] = self.action_reward_reduction
+
+        #DeepSeek
+        # def update_worker_envs(worker):
+        #     # Retrieve all sub-environments from the worker
+        #     envs = worker.env.get_sub_environments()
+        #     for env in envs:
+        #         # if isinstance(env, SimpleSky):
+        #         env.set_param(action_reward_reduction)
+        #
+        # algorithm.workers.foreach_worker(update_worker_envs)
+
+        # def update_env(env):
+        #     # if hasattr(env, "action_reward_reduction"):
+        #     print("Updating env")
+        #     env.action_reward_reduction = action_reward_reduction
+        #     print(env.action_reward_reduction)
+        #
+        # # print("Type:", type(algorithm.env_runner_group))
+        # algorithm.env_runner_group.foreach_worker(lambda worker: worker.foreach_env(update_env))
+        # algorithm.env_runner_group.foreach_worker(lambda worker: worker.foreach_env(lambda env: print("ARR:", env.get_action_reward_reduction())))
+        # raise ValueError("STOP")
+        # algorithm.env_runner_group.foreach_env(lambda env: env.update_action_reward_reduction(action_reward_reduction))
 
         # If win rate is good -> Snapshot current policy and play against
         # it next, keeping the snapshot fixed and only improving the "main"
@@ -160,6 +212,8 @@ class SkyjoLogging_and_SelfPlayCallbacks(DefaultCallbacks):
         # +2 = main + random
         result["league_size"] = self.current_opponent + 3
         self.n_main_policy_win = 0
+
+        self.action_reward_reduction = max(0, self.action_reward_reduction * self.action_reward_decay)
 
         #print(f"Matchups:\n{self._matching_stats}")
 

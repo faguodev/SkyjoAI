@@ -124,6 +124,9 @@ class SimpleSkyjoEnv(AECEnv):
     def update_action_reward_reduction(self, action_reward_reduction):
         self.action_reward_reduction = action_reward_reduction
 
+    def get_action_reward_reduction(self):
+        return self.action_reward_reduction
+
     def observation_space(self, agent):
         """
         observations are:
@@ -254,6 +257,7 @@ class SimpleSkyjoEnv(AECEnv):
             final_scores = [int(score) for score in self.table.get_game_metrics()["final_score"]]
             winner_ids = np.argwhere(final_scores == np.min(final_scores)).flatten().tolist()
             self.infos[0]["winner_ids"] = winner_ids
+            self.infos[0]["action_reward_reduction"] = self.action_reward_reduction
             for idx, agent_id in enumerate(self.agents):
                 self.infos[agent_id]["final_score"] = final_scores[agent_id]
 

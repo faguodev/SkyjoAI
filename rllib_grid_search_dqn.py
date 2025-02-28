@@ -11,6 +11,8 @@ from ray.rllib.env.wrappers.pettingzoo_env import PettingZooEnv
 from ray.tune.registry import register_env
 from callback_functions import SkyjoLogging_and_SelfPlayCallbacks
 from custom_models.dqn_action_mask_model import DQNActionMaskModel
+# from custom_models.dqn_action_mask_model_2 import DQNActionMaskModel
+from custom_models.custom_epsilon_greedy import EpsilonGreedyCustom
 # from custom_models.dqn_action_mask_custom import DQNActionMaskModel
 from custom_models.action_mask_model import TorchActionMaskModel
 from custom_models.fixed_policies import PreProgrammedPolicyOneHot, PreProgrammedPolicySimple, PreProgrammedPolicyEfficientOneHot
@@ -111,6 +113,14 @@ def train_model(
             dueling=False,
             double_q=False
         )#, lr=0.2)
+        .exploration(
+            exploration_config={
+                "type": EpsilonGreedyCustom,  # Use the custom exploration strategy
+                "initial_epsilon": 0.0,       # Initial epsilon value
+                "final_epsilon": 0.00,        # Final epsilon value
+                "epsilon_timesteps": 10000,   # Timesteps over which to anneal epsilon
+            }
+        )
         .environment("skyjo", env_config=skyjo_config)
         .framework('torch')
         .callbacks(functools.partial(
@@ -139,12 +149,6 @@ def train_model(
             enable_rl_module_and_learner=False,
         )
         .learners(num_gpus_per_learner=1)
-        .exploration(
-            exploration_config={
-                "type": "SoftQ",
-                "temperature": 10.0  # Controls randomness, higher = more exploration
-            }
-        )
     )
 
     algo = config.build()
