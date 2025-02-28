@@ -15,6 +15,7 @@ Welcome to the SkyjoAI repository! This repository contains our implementation o
 - **`eval.py`**, **`evaluation.ipynb`**, **`eval_compare_with_others.py`**: Used for evaluating trained models.
 - **`rllib_self_play.py`**, **`rllib_grid_search.py`**: Used to train models.
 - **`skyjo_gui.py`**, **`skyjo_gui_compare_with_others.py`**: Play a game of Skyjo against trained models.
+- **`ARL_Skyjo.pdf`** contains the report that was written as part of our course
 
 ## Installation
 To use this repository, first install all dependencies listed in `environment.yml`:
